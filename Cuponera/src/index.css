@@ -1,16 +1,40 @@
+@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap');
+
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  /* Tipografía */
+  font-family: 'Inter', 'Poppins', Helvetica, Arial, sans-serif;
   line-height: 1.5;
   font-weight: 400;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 0.87);
-  background-color: #242424;
+  /* Esquema de color */
+  color-scheme: light;
+  color: #464646;
+  background-color: #F7F8F4;
 
+  /* Renderizado */
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+
+  /* ── Paleta La Cuponera ── */
+  --color-principal:   #30391F;
+  --color-comp1:       #668A4C;
+  --color-comp2:       #ACCC7B;
+  --color-oscuro:      #464646;
+  --color-claro:       #FFFFFF;
+  --color-bg:          #F7F8F4;
+
+  /* ── Tokens semánticos ── */
+  --color-text:        #464646;
+  --color-text-soft:   #7a7a7a;
+  --color-text-invert: #FFFFFF;
+  --color-primary:     #30391F;
+  --color-accent:      #668A4C;
+  --color-highlight:   #ACCC7B;
+  --color-surface:     #FFFFFF;
+  --color-border:      #d6dbc8;
+  --color-shadow:      rgba(48, 57, 31, 0.12);
 }
 
 a {

@@ -6,9 +6,8 @@ import CouponsDashboard from "./components/CouponsDashboard";
 import Login from "./components/Login";
 import Registro from "./components/Registro";
 
-// ═══════════════════════════════════════════════════════
+
 //  NavBar
-// ═══════════════════════════════════════════════════════
 function NavBar() {
   const { user, logout } = useAuth();
   const [menuAbierto, setMenuAbierto] = useState(false);
@@ -30,7 +29,7 @@ function NavBar() {
           <div className="hidden md:flex items-center gap-6">
             <Link
               to="/comprar"
-              className="text-gray-300 hover:text-[#709756] transition-colors font-semibold text-sm"
+              className="text-gray-300 hover:text-[#709756] transition-colors font-semibold text-sm "
             >
               Comprar Cupones
             </Link>
@@ -144,18 +143,14 @@ function NavBar() {
   );
 }
 
-// ═══════════════════════════════════════════════════════
-//  Ruta protegida
-// ═══════════════════════════════════════════════════════
+
 function RutaProtegida({ children }) {
   const { user, loading } = useAuth();
   if (loading) return null;
   return user ? children : <Navigate to="/login" replace />;
 }
 
-// ═══════════════════════════════════════════════════════
-//  App
-// ═══════════════════════════════════════════════════════
+
 function App() {
   return (
     <AuthProvider>

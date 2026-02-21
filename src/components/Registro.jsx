@@ -97,9 +97,9 @@ export default function Registro() {
 
           {/* Título mobile */}
           <div className="lg:hidden text-center mb-8">
-            <span className="text-5xl">🏷️</span>
+            <span className="text-5xl"></span>
             <h1 className="mt-3 text-3xl font-extrabold text-white">
-              La <span className="text-[#9bbf7a]">Cuponera</span>
+              <span className="text-[#9bbf7a]">La Cuponera</span>
             </h1>
           </div>
 

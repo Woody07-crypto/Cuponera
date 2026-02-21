@@ -2,9 +2,8 @@ import { initializeApp } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 
-
 const firebaseConfig = {
-   apiKey: "AIzaSyAUOcpBsnye4uucc10vzr78pymXNMX7KGQ",
+  apiKey: "AIzaSyAUOcpBsnye4uucc10vzr78pymXNMX7KGQ",
   authDomain: "cuponera-esen.firebaseapp.com",
   projectId: "cuponera-esen",
   storageBucket: "cuponera-esen.firebasestorage.app",

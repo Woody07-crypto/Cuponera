@@ -1,41 +1,60 @@
 import { BrowserRouter, Routes, Route, Navigate, Link } from "react-router-dom";
-
-import CompraForm from "./components/compraForm";
-import ConfirmacionCompra from "./components/ConfirmacionCompra";
+import { AuthProvider, useAuth } from "./context/AuthContext";
+import MostrarOfertas from "./components/MostrarOfertas";
 import CouponsDashboard from "./components/CouponsDashboard";
-import { useCompra } from "./hooks/useCompra";
 import Login from "./components/Login";
 import Registro from "./components/Registro";
-import { AuthProvider, useAuth } from "./context/AuthContext";
 
 
 function NavBar() {
-  const { user, logout } = useAuth(); 
+  const { user, logout } = useAuth();
 
   return (
     <nav className="bg-[#1a241b] text-white p-4 flex justify-center gap-6 shadow-md items-center">
-      <Link to="/comprar" className="hover:text-[#709756] transition-colors font-semibold">
+      {/* Enlace principal — visible para todos */}
+      <Link
+        to="/comprar"
+        className="hover:text-[#709756] transition-colors font-semibold"
+      >
         Comprar Cupones
       </Link>
-      
-    
+
+      {/* Solo visible si el usuario está autenticado */}
       {user && (
-        <Link to="/mis-cupones" className="hover:text-[#709756] transition-colors font-semibold">
+        <Link
+          to="/mis-cupones"
+          className="hover:text-[#709756] transition-colors font-semibold"
+        >
           Mis Cupones
         </Link>
       )}
 
-      {}
-      <div className="flex gap-4 ml-4 pl-4 border-l border-gray-600">
+      {/* Auth section */}
+      <div className="flex gap-4 ml-4 pl-4 border-l border-gray-600 items-center">
         {!user ? (
           <>
-            <Link to="/login" className="hover:text-[#709756] transition-colors">Iniciar Sesión</Link>
-            <Link to="/registro" className="bg-[#709756] px-3 py-1 rounded hover:bg-[#5c7d46] transition-colors">Registrarse</Link>
+            <Link
+              to="/login"
+              className="hover:text-[#709756] transition-colors"
+            >
+              Iniciar Sesión
+            </Link>
+            <Link
+              to="/registro"
+              className="bg-[#709756] px-3 py-1 rounded hover:bg-[#5c7d46] transition-colors"
+            >
+              Registrarse
+            </Link>
           </>
         ) : (
           <div className="flex items-center gap-3">
             <span className="text-xs text-gray-400">{user.email}</span>
-            <button onClick={logout} className="text-red-400 hover:text-red-300 text-sm">Salir</button>
+            <button
+              onClick={logout}
+              className="text-red-400 hover:text-red-300 text-sm"
+            >
+              Salir
+            </button>
           </div>
         )}
       </div>
@@ -43,46 +62,41 @@ function NavBar() {
   );
 }
 
+
+function RutaProtegida({ children }) {
+  const { user, loading } = useAuth();
+
+  if (loading) return null; // espera a que Firebase confirme el estado
+
+  return user ? children : <Navigate to="/login" replace />;
+}
+
+
 function App() {
-  const { cantidad, setCantidad, comprar, codigoGenerado } = useCompra();
-
-  const handleComprar = () => {
-    comprar("RES"); 
-  };
-
   return (
-  
     <AuthProvider>
       <BrowserRouter>
-        
         <NavBar />
-
         <Routes>
-          <Route path="/" element={<Navigate to="/comprar" />} />
-          
-          {/* nuevas rutas alessandro*/}
-          <Route path="/login" element={<Login />} />
+          {/* Redirige raíz a /comprar */}
+          <Route path="/" element={<Navigate to="/comprar" replace />} />
+
+          {/* Pública: listado de ofertas */}
+          <Route path="/comprar" element={<MostrarOfertas />} />
+
+          {/* Auth */}
+          <Route path="/login"   element={<Login />} />
           <Route path="/registro" element={<Registro />} />
 
+          {/* Protegida: solo usuarios autenticados */}
           <Route
-            path="/comprar"
+            path="/mis-cupones"
             element={
-              <div className="p-8 flex flex-col items-center">
-                <CompraForm
-                  cantidad={cantidad}
-                  setCantidad={setCantidad}
-                  onComprar={handleComprar}
-                />
-                {codigoGenerado && (
-                  <div className="mt-6">
-                    <ConfirmacionCompra codigo={codigoGenerado} />
-                  </div>
-                )}
-              </div>
+              <RutaProtegida>
+                <CouponsDashboard />
+              </RutaProtegida>
             }
           />
-          
-          <Route path="/mis-cupones" element={<CouponsDashboard />} />
         </Routes>
       </BrowserRouter>
     </AuthProvider>

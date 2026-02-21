@@ -1,41 +1,59 @@
 import { useCompra } from "../hooks/useCompra";
 import { useNavigate } from "react-router-dom";
 
-
 export default function CompraForm({ oferta, formatFecha, onClose }) {
   const navigate = useNavigate();
-  const { cantidad, setCantidad, comprar, codigosGenerados, loading, error, exitoso } = useCompra();
+
+  const {
+    cantidad,
+    setCantidad,
+    comprar,
+    codigosGenerados,
+    loading,
+    error,
+    exitoso
+  } = useCompra();
 
   const subtotal = (Number(oferta.precioOferta) * cantidad).toFixed(2);
 
   const maxCupones =
     oferta.cantidadLimite != null
       ? oferta.cantidadLimite - (oferta.cuponesVendidos || 0)
-      : 10; // sin límite definido → permitimos hasta 10
+      : 10;
 
+  // ✅ AQUÍ agregamos control correcto
   const handleSubmit = async (e) => {
     e.preventDefault();
-    await comprar(oferta);
+
+    const resultado = await comprar(oferta);
+
+    // si tu hook devuelve true cuando es exitoso
+    if (resultado) {
+      console.log("Compra exitosa");
+    }
   };
 
   return (
-    // Fondo oscuro semitransparente
     <div
       className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 px-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
     >
       <div className="bg-[#2c3e2e] border border-[#709756] rounded-2xl w-full max-w-md p-8 shadow-2xl">
 
-        {/* ── Vista de éxito ── */}
+        {/* ───────── VISTA DE ÉXITO ───────── */}
         {exitoso ? (
           <div className="text-center flex flex-col gap-4">
             <div className="text-5xl">🎉</div>
-            <h3 className="text-2xl font-extrabold text-[#9bbf7a]">¡Compra exitosa!</h3>
+
+            {/* ✅ Mensaje confirmado */}
+            <h3 className="text-2xl font-extrabold text-[#9bbf7a]">
+              ¡Compra exitosa!
+            </h3>
+
             <p className="text-gray-300 text-sm">
               Se {codigosGenerados.length === 1 ? "generó" : "generaron"} {codigosGenerados.length} cupón{codigosGenerados.length > 1 ? "es" : ""}:
             </p>
 
-            {/* Códigos generados */}
             <div className="flex flex-col gap-2">
               {codigosGenerados.map((codigo) => (
                 <div
@@ -58,6 +76,7 @@ export default function CompraForm({ oferta, formatFecha, onClose }) {
               >
                 Ver mis cupones
               </button>
+
               <button
                 onClick={onClose}
                 className="flex-1 bg-white/10 hover:bg-white/20 text-white font-bold py-2.5 rounded-lg transition-colors"
@@ -68,9 +87,7 @@ export default function CompraForm({ oferta, formatFecha, onClose }) {
           </div>
 
         ) : (
-          /* ── Formulario de compra ── */
           <>
-            {/* Encabezado */}
             <div className="flex items-start justify-between mb-6">
               <div>
                 <p className="text-xs font-bold uppercase tracking-widest text-[#9bbf7a] mb-1">
@@ -80,6 +97,7 @@ export default function CompraForm({ oferta, formatFecha, onClose }) {
                   {oferta.titulo}
                 </h3>
               </div>
+
               <button
                 onClick={onClose}
                 className="text-gray-400 hover:text-white text-2xl leading-none ml-4 shrink-0"
@@ -88,19 +106,21 @@ export default function CompraForm({ oferta, formatFecha, onClose }) {
               </button>
             </div>
 
-            {/* Info de la oferta */}
             <div className="bg-[#3a503d] rounded-xl p-4 mb-6 flex flex-col gap-1.5 text-sm text-gray-300">
               <div className="flex justify-between">
                 <span>Precio por cupón:</span>
-                <span className="font-bold text-[#9bbf7a]">${Number(oferta.precioOferta).toFixed(2)}</span>
+                <span className="font-bold text-[#9bbf7a]">
+                  ${Number(oferta.precioOferta).toFixed(2)}
+                </span>
               </div>
               <div className="flex justify-between">
                 <span>Canjear antes de:</span>
-                <span className="font-semibold text-white">{formatFecha(oferta.fechaLimiteCupon)}</span>
+                <span className="font-semibold text-white">
+                  {formatFecha(oferta.fechaLimiteCupon)}
+                </span>
               </div>
             </div>
 
-            {/* Error */}
             {error && (
               <div className="bg-red-900/50 border border-red-500 text-red-300 text-sm px-4 py-2 rounded-lg mb-4">
                 {error}
@@ -109,7 +129,6 @@ export default function CompraForm({ oferta, formatFecha, onClose }) {
 
             <form onSubmit={handleSubmit} className="flex flex-col gap-5">
 
-              {/* Selector de cantidad */}
               <div>
                 <label className="block text-sm text-gray-400 mb-2 font-semibold">
                   Cantidad de cupones
@@ -122,9 +141,11 @@ export default function CompraForm({ oferta, formatFecha, onClose }) {
                   >
                     −
                   </button>
+
                   <span className="text-2xl font-extrabold text-white w-8 text-center">
                     {cantidad}
                   </span>
+
                   <button
                     type="button"
                     onClick={() => setCantidad((c) => Math.min(maxCupones, c + 1))}
@@ -132,13 +153,13 @@ export default function CompraForm({ oferta, formatFecha, onClose }) {
                   >
                     +
                   </button>
+
                   <span className="text-xs text-gray-500">
                     (máx. {maxCupones})
                   </span>
                 </div>
               </div>
 
-              {/* Simulación de pago con tarjeta */}
               <div>
                 <label className="block text-sm text-gray-400 mb-2 font-semibold">
                   Datos de tarjeta (simulado)
@@ -151,6 +172,7 @@ export default function CompraForm({ oferta, formatFecha, onClose }) {
                     className="w-full px-4 py-2.5 rounded-lg bg-[#3a503d] border border-gray-600 text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-[#709756]"
                     required
                   />
+
                   <div className="grid grid-cols-2 gap-3">
                     <input
                       type="text"
@@ -170,13 +192,13 @@ export default function CompraForm({ oferta, formatFecha, onClose }) {
                 </div>
               </div>
 
-              {/* Total */}
               <div className="flex justify-between items-center border-t border-gray-600 pt-4 text-white">
                 <span className="font-semibold text-gray-300">Total a pagar:</span>
-                <span className="text-3xl font-extrabold text-[#9bbf7a]">${subtotal}</span>
+                <span className="text-3xl font-extrabold text-[#9bbf7a]">
+                  ${subtotal}
+                </span>
               </div>
 
-              {/* Botón confirmar */}
               <button
                 type="submit"
                 disabled={loading}

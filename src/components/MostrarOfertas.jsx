@@ -233,4 +233,4 @@ function TarjetaOferta({ oferta, descuento, formatFecha, user, onComprar }) {
       </div>
     </div>
   );
-}
+} 

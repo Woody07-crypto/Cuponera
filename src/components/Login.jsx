@@ -38,7 +38,7 @@ export default function Login() {
   };
 
   return (
-    <div className="flex min-h-[calc(100vh-64px)]">
+    <div className="flex min-h-[calc(100vh-64px)] ">
 
       {/* ── Panel izquierdo decorativo (solo desktop) ── */}
       <div className="hidden lg:flex lg:w-1/2 bg-[#1a241b] flex-col items-center justify-center px-16 gap-8">
@@ -67,9 +67,9 @@ export default function Login() {
 
           {/* Título — visible solo en mobile */}
           <div className="lg:hidden text-center mb-8">
-            <span className="text-5xl">🏷️</span>
+            <span className="text-5xl"></span>
             <h1 className="mt-3 text-3xl font-extrabold text-white">
-              La <span className="text-[#9bbf7a]">Cuponera</span>
+              <span className="text-[#9bbf7a]">La Cuponera</span>
             </h1>
           </div>
 

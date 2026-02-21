@@ -5,6 +5,9 @@ import MostrarOfertas from "./components/MostrarOfertas";
 import CouponsDashboard from "./components/CouponsDashboard";
 import Login from "./components/Login";
 import Registro from "./components/Registro";
+import Footer from "./components/Footer";
+import Terminos from "./components/Terminos";
+import Privacidad from "./components/Privacidad";
 
 // ═══════════════════════════════════════════════════════
 //  NavBar
@@ -160,24 +163,34 @@ function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
-        <NavBar />
-        <Routes>
-          <Route path="/" element={<Navigate to="/comprar" replace />} />
-          <Route path="/comprar" element={<MostrarOfertas />} />
-          <Route path="/login" element={<Login />} />
-          <Route path="/registro" element={<Registro />} />
-          <Route
-            path="/mis-cupones"
-            element={
-              <RutaProtegida>
-                <CouponsDashboard />
-              </RutaProtegida>
-            }
-          />
-        </Routes>
+        <div className="min-h-screen flex flex-col bg-[#0f1a13]">
+
+          <NavBar />
+
+          <main className="flex-1">
+            <Routes>
+              <Route path="/" element={<Navigate to="/comprar" replace />} />
+              <Route path="/comprar" element={<MostrarOfertas />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/registro" element={<Registro />} />
+              <Route path="/terminos" element={<Terminos />} />
+              <Route path="/privacidad" element={<Privacidad />} />
+              <Route
+                path="/mis-cupones"
+                element={
+                  <RutaProtegida>
+                    <CouponsDashboard />
+                  </RutaProtegida>
+                }
+              />
+            </Routes>
+          </main>
+
+          <Footer />
+
+        </div>
       </BrowserRouter>
     </AuthProvider>
-  );
+  )
 }
-
 export default App;

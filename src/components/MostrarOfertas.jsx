@@ -1,10 +1,12 @@
 import { useState, useEffect } from "react";
 import { collection, getDocs, query, where } from "firebase/firestore";
-import { db, auth } from "../firebase/config";
+import { db } from "../firebase/config";
+import { useAuth } from "../context/AuthContext";
+import { Link } from "react-router-dom";
 import CompraForm from "./CompraForm";
 
-
 export default function MostrarOfertas() {
+  const { user } = useAuth();
   const [ofertasPorRubro, setOfertasPorRubro] = useState({});
   const [rubroActivo, setRubroActivo] = useState(null);
   const [ofertaSeleccionada, setOfertaSeleccionada] = useState(null);
@@ -29,10 +31,7 @@ export default function MostrarOfertas() {
         const inicio = oferta.fechaInicio?.toDate ? oferta.fechaInicio.toDate() : new Date(oferta.fechaInicio);
         const fin    = oferta.fechaFin?.toDate    ? oferta.fechaFin.toDate()    : new Date(oferta.fechaFin);
 
-        // Solo vigentes
         if (inicio > hoy || fin < hoy) return;
-
-        // Sin cupones disponibles
         if (oferta.cantidadLimite != null && (oferta.cuponesVendidos || 0) >= oferta.cantidadLimite) return;
 
         const rubro = oferta.rubro || "Sin categoría";
@@ -51,8 +50,6 @@ export default function MostrarOfertas() {
     }
   }
 
-  const rubros = Object.keys(ofertasPorRubro);
-
   function calcularDescuento(regular, oferta) {
     if (!regular || regular === 0) return 0;
     return Math.round(((regular - oferta) / regular) * 100);
@@ -64,7 +61,7 @@ export default function MostrarOfertas() {
     return d.toLocaleDateString("es-SV", { day: "2-digit", month: "short", year: "numeric" });
   }
 
-  // ── Estados especiales ──────────────────────────────────────
+  // ── Cargando ──
   if (loading) {
     return (
       <div className="min-h-screen bg-[#2c3e2e] flex items-center justify-center">
@@ -73,6 +70,7 @@ export default function MostrarOfertas() {
     );
   }
 
+  // ── Error ──
   if (error) {
     return (
       <div className="min-h-screen bg-[#2c3e2e] flex items-center justify-center">
@@ -80,6 +78,8 @@ export default function MostrarOfertas() {
       </div>
     );
   }
+
+  const rubros = Object.keys(ofertasPorRubro);
 
   if (rubros.length === 0) {
     return (
@@ -89,7 +89,6 @@ export default function MostrarOfertas() {
     );
   }
 
-  // ── Vista principal ─────────────────────────────────────────
   return (
     <div className="min-h-screen bg-[#2c3e2e] py-12 px-4 sm:px-6 lg:px-8 text-white font-sans">
       <div className="max-w-7xl mx-auto">
@@ -130,6 +129,7 @@ export default function MostrarOfertas() {
                 oferta={oferta}
                 descuento={calcularDescuento(oferta.precioRegular, oferta.precioOferta)}
                 formatFecha={formatFecha}
+                user={user}
                 onComprar={() => setOfertaSeleccionada(oferta)}
               />
             ))}
@@ -137,8 +137,8 @@ export default function MostrarOfertas() {
         )}
       </div>
 
-      {/* Modal de compra */}
-      {ofertaSeleccionada && (
+      {/* Modal de compra — solo si hay sesión */}
+      {ofertaSeleccionada && user && (
         <CompraForm
           oferta={ofertaSeleccionada}
           formatFecha={formatFecha}
@@ -149,8 +149,10 @@ export default function MostrarOfertas() {
   );
 }
 
-
-function TarjetaOferta({ oferta, descuento, formatFecha, onComprar }) {
+// ═══════════════════════════════════════════════════════════════
+//  TarjetaOferta
+// ═══════════════════════════════════════════════════════════════
+function TarjetaOferta({ oferta, descuento, formatFecha, user, onComprar }) {
   const cuponesDisponibles =
     oferta.cantidadLimite != null
       ? oferta.cantidadLimite - (oferta.cuponesVendidos || 0)
@@ -159,12 +161,10 @@ function TarjetaOferta({ oferta, descuento, formatFecha, onComprar }) {
   return (
     <div className="flex flex-col rounded-xl overflow-hidden border border-[#709756] bg-[#3a503d] hover:shadow-xl hover:shadow-black/30 transition-shadow duration-300">
 
-      {/* Franja superior */}
       <div className="h-1.5 bg-gradient-to-r from-[#709756] to-[#9bbf7a]" />
 
       <div className="p-6 flex flex-col gap-3 flex-1">
 
-        {/* Empresa + badge descuento */}
         <div className="flex items-start justify-between gap-2">
           <span className="text-xs font-bold uppercase tracking-widest text-[#9bbf7a]">
             {oferta.nombreEmpresa || "Empresa"}
@@ -176,17 +176,14 @@ function TarjetaOferta({ oferta, descuento, formatFecha, onComprar }) {
           )}
         </div>
 
-        {/* Título */}
         <h3 className="text-lg font-bold text-white leading-snug line-clamp-2">
           {oferta.titulo}
         </h3>
 
-        {/* Descripción */}
         <p className="text-sm text-gray-300 line-clamp-3 leading-relaxed">
           {oferta.descripcion}
         </p>
 
-        {/* Precios */}
         <div className="flex items-baseline gap-3 mt-1">
           <span className="text-gray-400 line-through text-sm">
             ${Number(oferta.precioRegular).toFixed(2)}
@@ -196,7 +193,6 @@ function TarjetaOferta({ oferta, descuento, formatFecha, onComprar }) {
           </span>
         </div>
 
-        {/* Meta info */}
         <div className="border-t border-gray-600 pt-3 flex flex-col gap-1.5 text-xs text-gray-400">
           <span>📅 Vigente hasta: <strong className="text-gray-200">{formatFecha(oferta.fechaFin)}</strong></span>
           <span>🎫 Canjear antes de: <strong className="text-gray-200">{formatFecha(oferta.fechaLimiteCupon)}</strong></span>
@@ -205,13 +201,35 @@ function TarjetaOferta({ oferta, descuento, formatFecha, onComprar }) {
           )}
         </div>
 
-        {/* Botón */}
-        <button
-          onClick={onComprar}
-          className="mt-auto w-full bg-[#709756] hover:bg-[#5c7d46] text-white font-bold py-3 rounded-lg transition-colors duration-200"
-        >
-          Comprar cupón
-        </button>
+        {/* Botón — comportamiento diferente según si hay sesión */}
+        {user ? (
+          <button
+            onClick={onComprar}
+            className="mt-auto w-full bg-[#709756] hover:bg-[#5c7d46] text-white font-bold py-3 rounded-lg transition-colors duration-200"
+          >
+            Comprar cupón
+          </button>
+        ) : (
+          <div className="mt-auto flex flex-col gap-2">
+            <div className="text-center text-xs text-gray-400 bg-[#2c3e2e] rounded-lg px-3 py-2 border border-gray-600">
+              Debes iniciar sesión para comprar
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <Link
+                to="/login"
+                className="text-center bg-[#709756] hover:bg-[#5c7d46] text-white font-bold py-2.5 rounded-lg transition-colors duration-200 text-sm"
+              >
+                Iniciar sesión
+              </Link>
+              <Link
+                to="/registro"
+                className="text-center bg-transparent border border-[#709756] hover:bg-[#709756] text-[#9bbf7a] hover:text-white font-bold py-2.5 rounded-lg transition-colors duration-200 text-sm"
+              >
+                Registrarse
+              </Link>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

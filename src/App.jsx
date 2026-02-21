@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { BrowserRouter, Routes, Route, Navigate, Link } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import MostrarOfertas from "./components/MostrarOfertas";
@@ -5,90 +6,166 @@ import CouponsDashboard from "./components/CouponsDashboard";
 import Login from "./components/Login";
 import Registro from "./components/Registro";
 
-
+// ═══════════════════════════════════════════════════════
+//  NavBar
+// ═══════════════════════════════════════════════════════
 function NavBar() {
   const { user, logout } = useAuth();
+  const [menuAbierto, setMenuAbierto] = useState(false);
 
   return (
-    <nav className="bg-[#1a241b] text-white p-4 flex justify-center gap-6 shadow-md items-center">
-      {/* Enlace principal — visible para todos */}
-      <Link
-        to="/comprar"
-        className="hover:text-[#709756] transition-colors font-semibold"
-      >
-        Comprar Cupones
-      </Link>
+    <nav className="bg-[#1a241b] text-white shadow-lg">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex items-center justify-between h-16">
 
-      {/* Solo visible si el usuario está autenticado */}
-      {user && (
-        <Link
-          to="/mis-cupones"
-          className="hover:text-[#709756] transition-colors font-semibold"
-        >
-          Mis Cupones
-        </Link>
-      )}
+          {/* Logo / Marca */}
+          <Link to="/comprar" className="flex items-center gap-2 shrink-0">
+            <span className="text-[#709756] text-2xl"></span>
+            <span className="font-extrabold text-lg tracking-tight">
+              <span className="text-[#709756]">La Cuponera</span>
+            </span>
+          </Link>
 
-      {/* Auth section */}
-      <div className="flex gap-4 ml-4 pl-4 border-l border-gray-600 items-center">
-        {!user ? (
-          <>
+          {/* Links — desktop */}
+          <div className="hidden md:flex items-center gap-6">
             <Link
-              to="/login"
-              className="hover:text-[#709756] transition-colors"
+              to="/comprar"
+              className="text-gray-300 hover:text-[#709756] transition-colors font-semibold text-sm"
             >
-              Iniciar Sesión
+              Comprar Cupones
             </Link>
-            <Link
-              to="/registro"
-              className="bg-[#709756] px-3 py-1 rounded hover:bg-[#5c7d46] transition-colors"
-            >
-              Registrarse
-            </Link>
-          </>
-        ) : (
-          <div className="flex items-center gap-3">
-            <span className="text-xs text-gray-400">{user.email}</span>
-            <button
-              onClick={logout}
-              className="text-red-400 hover:text-red-300 text-sm"
-            >
-              Salir
-            </button>
+            {user && (
+              <Link
+                to="/mis-cupones"
+                className="text-gray-300 hover:text-[#709756] transition-colors font-semibold text-sm"
+              >
+                Mis Cupones
+              </Link>
+            )}
           </div>
-        )}
+
+          {/* Auth — desktop */}
+          <div className="hidden md:flex items-center gap-3 pl-4 border-l border-gray-700">
+            {!user ? (
+              <>
+                <Link
+                  to="/login"
+                  className="text-gray-300 hover:text-[#709756] transition-colors text-sm font-medium"
+                >
+                  Iniciar Sesión
+                </Link>
+                <Link
+                  to="/registro"
+                  className="bg-[#709756] hover:bg-[#5c7d46] text-white px-4 py-1.5 rounded-lg text-sm font-semibold transition-colors"
+                >
+                  Registrarse
+                </Link>
+              </>
+            ) : (
+              <div className="flex items-center gap-3">
+                <div className="flex flex-col items-end">
+                  <span className="text-xs text-gray-400 leading-tight">{user.email}</span>
+                  <span className="text-xs text-[#9bbf7a] leading-tight">Conectado</span>
+                </div>
+                <button
+                  onClick={logout}
+                  className="bg-red-900/40 hover:bg-red-800/60 text-red-400 hover:text-red-300 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border border-red-800/40"
+                >
+                  Salir
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Hamburger — mobile */}
+          <button
+            onClick={() => setMenuAbierto(!menuAbierto)}
+            className="md:hidden p-2 rounded-lg hover:bg-white/10 transition-colors"
+          >
+            <div className={`w-5 h-0.5 bg-white transition-all duration-200 ${menuAbierto ? "rotate-45 translate-y-1.5" : ""}`} />
+            <div className={`w-5 h-0.5 bg-white my-1 transition-all duration-200 ${menuAbierto ? "opacity-0" : ""}`} />
+            <div className={`w-5 h-0.5 bg-white transition-all duration-200 ${menuAbierto ? "-rotate-45 -translate-y-1.5" : ""}`} />
+          </button>
+        </div>
       </div>
+
+      {/* Menú mobile desplegable */}
+      {menuAbierto && (
+        <div className="md:hidden border-t border-gray-700 bg-[#1a241b] px-4 py-4 flex flex-col gap-3">
+          <Link
+            to="/comprar"
+            onClick={() => setMenuAbierto(false)}
+            className="text-gray-300 hover:text-[#709756] font-semibold text-sm py-2"
+          >
+            Comprar Cupones
+          </Link>
+          {user && (
+            <Link
+              to="/mis-cupones"
+              onClick={() => setMenuAbierto(false)}
+              className="text-gray-300 hover:text-[#709756] font-semibold text-sm py-2"
+            >
+              Mis Cupones
+            </Link>
+          )}
+          <div className="border-t border-gray-700 pt-3 flex flex-col gap-2">
+            {!user ? (
+              <>
+                <Link
+                  to="/login"
+                  onClick={() => setMenuAbierto(false)}
+                  className="text-center text-gray-300 hover:text-[#709756] font-medium text-sm py-2"
+                >
+                  Iniciar Sesión
+                </Link>
+                <Link
+                  to="/registro"
+                  onClick={() => setMenuAbierto(false)}
+                  className="text-center bg-[#709756] hover:bg-[#5c7d46] text-white px-4 py-2 rounded-lg text-sm font-semibold transition-colors"
+                >
+                  Registrarse
+                </Link>
+              </>
+            ) : (
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-gray-400">{user.email}</span>
+                <button
+                  onClick={() => { logout(); setMenuAbierto(false); }}
+                  className="text-red-400 hover:text-red-300 text-sm font-medium"
+                >
+                  Salir
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </nav>
   );
 }
 
-
+// ═══════════════════════════════════════════════════════
+//  Ruta protegida
+// ═══════════════════════════════════════════════════════
 function RutaProtegida({ children }) {
   const { user, loading } = useAuth();
-
-  if (loading) return null; // espera a que Firebase confirme el estado
-
+  if (loading) return null;
   return user ? children : <Navigate to="/login" replace />;
 }
 
-
+// ═══════════════════════════════════════════════════════
+//  App
+// ═══════════════════════════════════════════════════════
 function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
         <NavBar />
         <Routes>
-          {/* Redirige raíz a /comprar */}
           <Route path="/" element={<Navigate to="/comprar" replace />} />
-
-          {/* Pública: listado de ofertas */}
           <Route path="/comprar" element={<MostrarOfertas />} />
-
-          {/* Auth */}
-          <Route path="/login"   element={<Login />} />
+          <Route path="/login" element={<Login />} />
           <Route path="/registro" element={<Registro />} />
-
-          {/* Protegida: solo usuarios autenticados */}
           <Route
             path="/mis-cupones"
             element={

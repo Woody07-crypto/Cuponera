@@ -1,105 +1,402 @@
-@import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap');
+/* ══════════════════════════════════════════════════════════════════
+   La Cuponera — Estilos globales
+   Stack: React 19 + Vite + TailwindCSS
+   Paleta: Navy #0A1628 | Gold #C9A84C | Turquoise #00B4D8 | Cream #F8F9FA
+   ══════════════════════════════════════════════════════════════════ */
 
+/* ── Google Fonts ─────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700;800&family=Inter:wght@300;400;500;600;700&display=swap');
 
-@tailwind base;   
+/* ── Tailwind ─────────────────────────────────────────────────── */
+@tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-
+/* ══════════════════════════════════════════════════════════════════
+   VARIABLES CSS
+   ══════════════════════════════════════════════════════════════════ */
 :root {
+  /* Paleta principal */
+  --navy:          #0A1628;
+  --navy-light:    #0F2040;
+  --navy-dark:     #060E1A;
+  --gold:          #C9A84C;
+  --gold-light:    #E2C36A;
+  --gold-dark:     #A8873A;
+  --turquoise:     #00B4D8;
+  --turquoise-light: #48CAE4;
+  --cream:         #F8F9FA;
+  --cream-soft:    #EFF1F3;
+
+  /* Tokens semánticos (modo claro — no usado por defecto en este diseño oscuro) */
+  --bg-primary:    var(--navy-dark);
+  --bg-secondary:  var(--navy);
+  --bg-card:       rgba(15, 32, 64, 0.7);
+  --text-primary:  var(--cream);
+  --text-muted:    rgba(248, 249, 250, 0.6);
+  --text-accent:   var(--gold);
+  --border-subtle: rgba(201, 168, 76, 0.15);
+  --border-glass:  rgba(255, 255, 255, 0.08);
+
+  /* Glassmorphism */
+  --glass-bg:      rgba(10, 22, 40, 0.65);
+  --glass-border:  rgba(255, 255, 255, 0.10);
+  --glass-blur:    16px;
+
+  /* Sombras */
+  --shadow-card:   0 2px 16px rgba(0,0,0,0.4);
+  --shadow-hover:  0 8px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(201,168,76,0.2);
+  --shadow-gold:   0 4px 24px rgba(201, 168, 76, 0.3);
+  --shadow-glass:  0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255,255,255,0.08);
+
+  /* Radios */
+  --radius-sm:  8px;
+  --radius-md:  12px;
+  --radius-lg:  16px;
+  --radius-xl:  24px;
+
   /* Tipografía */
-  font-family: 'Inter', 'Poppins', Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
+  --font-heading: 'Playfair Display', Georgia, serif;
+  --font-body:    'Inter', system-ui, sans-serif;
 
-  /* Esquema de color */
-  color-scheme: light;
-  color: #464646;
-  background-color: #F7F8F4;
+  /* Transiciones */
+  --transition-fast:   150ms ease;
+  --transition-base:   250ms ease;
+  --transition-slow:   400ms ease;
+}
 
-  /* Renderizado */
-  font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+/* ══════════════════════════════════════════════════════════════════
+   RESET Y BASE
+   ══════════════════════════════════════════════════════════════════ */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
 
-  /* ── Paleta La Cuponera ── */
-  --color-principal:   #30391F;
-  --color-comp1:       #668A4C;
-  --color-comp2:       #ACCC7B;
-  --color-oscuro:      #464646;
-  --color-claro:       #FFFFFF;
-  --color-bg:          #F7F8F4;
-
-  /* ── Tokens semánticos ── */
-  --color-text:        #464646;
-  --color-text-soft:   #7a7a7a;
-  --color-text-invert: #FFFFFF;
-  --color-primary:     #30391F;
-  --color-accent:      #668A4C;
-  --color-highlight:   #ACCC7B;
-  --color-surface:     #FFFFFF;
-  --color-border:      #d6dbc8;
-  --color-shadow:      rgba(48, 57, 31, 0.12);
+html {
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
 }
 
 html, body, #root {
   width: 100%;
   min-height: 100vh;
-  margin: 0;
-  padding: 0;
-}
-
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
-}
-a:hover {
-  color: #535bf2;
 }
 
 body {
-  margin: 0;
-  display: flex;
-  place-items: center;
-  min-width: 320px;
-  min-height: 100vh;
+  font-family: var(--font-body);
+  background-color: var(--navy-dark);
+  color: var(--cream);
+  line-height: 1.6;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  overflow-x: hidden;
 }
 
-h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+/* ── Tipografía base ──────────────────────────────────────────── */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+  line-height: 1.2;
+  font-weight: 700;
+  color: var(--cream);
+}
+
+p {
+  line-height: 1.7;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+  transition: color var(--transition-base);
+}
+
+img {
+  display: block;
+  max-width: 100%;
 }
 
 button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
+  font-family: var(--font-body);
   cursor: pointer;
-  transition: border-color 0.25s;
-}
-button:hover {
-  border-color: #646cff;
-}
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+  border: none;
+  background: none;
 }
 
-@media (prefers-color-scheme: light) {
-  :root {
-    color: #213547;
-    background-color: #ffffff;
-  }
-  a:hover {
-    color: #747bff;
-  }
-  button {
-    background-color: #f9f9f9;
-  }
+input, textarea, select {
+  font-family: var(--font-body);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   COMPONENTES GLOBALES
+   ══════════════════════════════════════════════════════════════════ */
+
+/* ── Glassmorphism base ───────────────────────────────────────── */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--shadow-glass);
+}
+
+/* ── Card premium ─────────────────────────────────────────────── */
+.card-premium {
+  background: rgba(15, 32, 64, 0.6);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+  transition: transform var(--transition-base), box-shadow var(--transition-base), border-color var(--transition-base);
+}
+.card-premium:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-hover);
+  border-color: rgba(201, 168, 76, 0.35);
+}
+
+/* ── Botón primario gold ──────────────────────────────────────── */
+.btn-gold {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 28px;
+  background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
+  color: var(--navy-dark);
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 0.9rem;
+  letter-spacing: 0.5px;
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-base);
+  box-shadow: var(--shadow-gold);
+  white-space: nowrap;
+}
+.btn-gold:hover {
+  background: linear-gradient(135deg, var(--gold-light) 0%, var(--gold) 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 30px rgba(201, 168, 76, 0.45);
+}
+.btn-gold:active {
+  transform: translateY(0);
+}
+.btn-gold:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* ── Botón outline turquesa ──────────────────────────────────── */
+.btn-outline {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 28px;
+  background: transparent;
+  color: var(--turquoise);
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.9rem;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--turquoise);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+.btn-outline:hover {
+  background: rgba(0, 180, 216, 0.12);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(0,180,216,0.2);
+}
+
+/* ── Inputs estilizados ───────────────────────────────────────── */
+.input-premium {
+  width: 100%;
+  padding: 14px 18px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1.5px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-md);
+  color: var(--cream);
+  font-family: var(--font-body);
+  font-size: 0.95rem;
+  transition: border-color var(--transition-base), box-shadow var(--transition-base), background var(--transition-base);
+  outline: none;
+}
+.input-premium::placeholder {
+  color: rgba(248, 249, 250, 0.3);
+}
+.input-premium:focus {
+  border-color: var(--gold);
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 0 0 3px rgba(201, 168, 76, 0.15);
+}
+.input-premium.valid {
+  border-color: #22c55e;
+  box-shadow: 0 0 0 3px rgba(34,197,94,0.15);
+}
+.input-premium.invalid {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 3px rgba(239,68,68,0.15);
+}
+
+/* ── Labels de formulario ─────────────────────────────────────── */
+.label-premium {
+  display: block;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(248, 249, 250, 0.5);
+  margin-bottom: 6px;
+}
+
+/* ── Mensaje de error inline ──────────────────────────────────── */
+.field-error {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: #f87171;
+  margin-top: 4px;
+  animation: fade-in 0.2s ease-out;
+}
+.field-success {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.75rem;
+  color: #4ade80;
+  margin-top: 4px;
+  animation: fade-in 0.2s ease-out;
+}
+
+/* ── Shimmer skeleton ─────────────────────────────────────────── */
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    rgba(255,255,255,0.04) 25%,
+    rgba(255,255,255,0.08) 50%,
+    rgba(255,255,255,0.04) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s infinite linear;
+  border-radius: var(--radius-md);
+}
+
+/* ── Badge dorado ─────────────────────────────────────────────── */
+.badge-gold {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  background: rgba(201, 168, 76, 0.15);
+  border: 1px solid rgba(201, 168, 76, 0.3);
+  border-radius: 100px;
+  color: var(--gold-light);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ── Gradiente de fondo de página ─────────────────────────────── */
+.page-bg {
+  background: radial-gradient(ellipse at top, #0F2040 0%, var(--navy-dark) 60%);
+  min-height: 100vh;
+}
+
+/* ── Divisor con degradado gold ───────────────────────────────── */
+.divider-gold {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  opacity: 0.3;
+}
+
+/* ── Scrollbar personalizada ──────────────────────────────────── */
+::-webkit-scrollbar        { width: 6px; }
+::-webkit-scrollbar-track  { background: var(--navy-dark); }
+::-webkit-scrollbar-thumb  { background: rgba(201,168,76,0.3); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(201,168,76,0.5); }
+
+/* ── Selección de texto ───────────────────────────────────────── */
+::selection {
+  background: rgba(201, 168, 76, 0.3);
+  color: var(--cream);
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   ANIMACIONES (complementan las de Tailwind)
+   ══════════════════════════════════════════════════════════════════ */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes fade-in-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0);    }
+}
+
+@keyframes shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position:  200% 0; }
+}
+
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* ── Card 3D hover effect ─────────────────────────────────────── */
+.card-3d {
+  transform-style: preserve-3d;
+  transition: transform 0.4s ease, box-shadow 0.4s ease;
+}
+.card-3d:hover {
+  box-shadow: var(--shadow-hover);
+}
+
+/* ── Overlay de carga de página ───────────────────────────────── */
+.page-loader {
+  position: fixed;
+  inset: 0;
+  background: var(--navy-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+/* ══════════════════════════════════════════════════════════════════
+   UTILIDADES EXTRA
+   ══════════════════════════════════════════════════════════════════ */
+
+/* Truncar texto a N líneas */
+.line-clamp-2 { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; }
+.line-clamp-3 { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 3; line-clamp: 3; -webkit-box-orient: vertical; }
+
+/* Texto degradado gold */
+.text-gradient-gold {
+  background: linear-gradient(135deg, var(--gold-light), var(--gold));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Texto degradado turquoise */
+.text-gradient-turquoise {
+  background: linear-gradient(135deg, var(--turquoise-light), var(--turquoise));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Borde animado dorado */
+.border-gold-glow {
+  border: 1px solid rgba(201,168,76,0.4);
+  box-shadow: 0 0 12px rgba(201,168,76,0.1), inset 0 0 12px rgba(201,168,76,0.03);
 }

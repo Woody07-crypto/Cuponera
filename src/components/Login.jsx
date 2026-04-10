@@ -1,7 +1,8 @@
 import { useState } from "react"
 import { auth, db } from "../firebase/config"
 import { signInWithEmailAndPassword } from "firebase/auth"
-import { doc, getDoc } from "firebase/firestore"
+import { fetchRoleAndProfile, rutaTrasLogin } from "../services/perfilService"
+
 import { useNavigate, Link } from "react-router-dom"
 
 const IcEye = () => (
@@ -107,19 +108,8 @@ export default function Login() {
     setLoading(true)
     try {
       const cred = await signInWithEmailAndPassword(auth, email, password)
-      const uid  = cred.user.uid
-      const snap = await getDoc(doc(db, "clientes", uid))
-      if (snap.exists()) { navigate("/mis-cupones"); return }
-      const pSnap = await getDoc(doc(db, "perfiles", uid))
-      if (pSnap.exists()) {
-        const r = pSnap.data().role
-        if (r === "admin")         navigate("/admin")
-        else if (r === "admin_empresa") navigate("/empresa/ofertas")
-        else if (r === "empleado") navigate("/canjear")
-        else navigate("/comprar")
-        return
-      }
-      navigate("/comprar")
+      const { role: r } = await fetchRoleAndProfile(db, cred.user.uid, cred.user.email)
+      navigate(rutaTrasLogin(r))
     } catch { setSrvErr("Correo o contraseña incorrectos.") }
     finally  { setLoading(false) }
   }

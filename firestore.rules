@@ -1,0 +1,127 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function perfilPath() {
+      return /databases/$(database)/documents/perfiles/$(request.auth.uid);
+    }
+
+    function hasPerfil() {
+      return signedIn() && exists(perfilPath());
+    }
+
+    function perfilData() {
+      return get(perfilPath()).data;
+    }
+
+    function isAdmin() {
+      return hasPerfil() && perfilData().role == 'admin';
+    }
+
+    function isAdminEmpresa() {
+      return hasPerfil() && perfilData().role == 'admin_empresa';
+    }
+
+    function isEmpleado() {
+      return hasPerfil() && perfilData().role == 'empleado';
+    }
+
+    function isRolCliente() {
+      return hasPerfil() && perfilData().role == 'cliente';
+    }
+
+    function esClienteLegacy() {
+      return signedIn() &&
+        exists(/databases/$(database)/documents/clientes/$(request.auth.uid)) &&
+        !hasPerfil();
+    }
+
+    function puedeComprarComoCliente() {
+      return signedIn() && (isRolCliente() || esClienteLegacy());
+    }
+
+    function ofertaEsDeMiEmpresa() {
+      return isAdminEmpresa() && (
+        (perfilData().empresaId != null && resource.data.empresaId == perfilData().empresaId) ||
+        (perfilData().nombreEmpresa != null && resource.data.nombreEmpresa == perfilData().nombreEmpresa)
+      );
+    }
+
+    function nuevaOfertaEsDeMiEmpresa() {
+      return isAdminEmpresa() && (
+        (perfilData().empresaId != null && request.resource.data.empresaId == perfilData().empresaId) ||
+        (perfilData().nombreEmpresa != null && request.resource.data.nombreEmpresa == perfilData().nombreEmpresa)
+      );
+    }
+
+    function empleadoPuedeVerCupon(cupon) {
+      return isEmpleado() && (
+        (perfilData().empresaId != null && cupon.empresaId == perfilData().empresaId) ||
+        (perfilData().nombreEmpresa != null && cupon.nombreEmpresa == perfilData().nombreEmpresa)
+      );
+    }
+
+    match /perfiles/{userId} {
+      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
+      allow create: if signedIn() && (
+        (request.auth.uid == userId && request.resource.data.role == 'cliente') ||
+        isAdmin()
+      );
+      allow update, delete: if isAdmin();
+    }
+
+    match /clientes/{userId} {
+      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
+      allow create: if signedIn() && request.auth.uid == userId;
+      allow update: if signedIn() && (request.auth.uid == userId || isAdmin());
+      allow delete: if isAdmin();
+    }
+
+    match /empresas/{empresaId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /ofertas/{ofertaId} {
+      allow read: if resource.data.estado == 'aprobada' ||
+        (signedIn() && isAdmin()) ||
+        (signedIn() && ofertaEsDeMiEmpresa());
+
+      allow create: if signedIn() && isAdminEmpresa() &&
+        nuevaOfertaEsDeMiEmpresa() &&
+        request.resource.data.estado == 'pendiente';
+
+      allow update: if isAdmin() ||
+        (signedIn() && isAdminEmpresa() && ofertaEsDeMiEmpresa() &&
+          !(request.resource.data.estado == 'aprobada' && resource.data.estado != 'aprobada')) ||
+        (puedeComprarComoCliente() &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['cuponesVendidos']));
+
+      allow delete: if isAdmin() || (signedIn() && isAdminEmpresa() && ofertaEsDeMiEmpresa());
+    }
+
+    match /cupones/{cuponId} {
+      allow read: if signedIn() && (
+        resource.data.clienteUid == request.auth.uid ||
+        isAdmin() ||
+        empleadoPuedeVerCupon(resource.data)
+      );
+
+      allow create: if signedIn() &&
+        request.resource.data.clienteUid == request.auth.uid;
+
+      allow update: if isAdmin() ||
+        (signedIn() && isEmpleado() && empleadoPuedeVerCupon(resource.data) &&
+          resource.data.estado == 'disponible' &&
+          request.resource.data.estado == 'canjeado' &&
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['estado', 'fechaCanje', 'canjeadoPorUid']));
+
+      allow delete: if isAdmin();
+    }
+  }
+}

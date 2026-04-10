@@ -5,6 +5,24 @@ import { useAuth } from "../context/AuthContext"
 import { Link } from "react-router-dom"
 import CompraForm from "./CompraForm"
 import { SkeletonGrid } from "./ui/SkeletonCard"
+import HeroBanner     from "../assets/arts/HeroBanner"
+import ConcertPoster  from "../assets/arts/ConcertPoster"
+import FoodPromo      from "../assets/arts/FoodPromo"
+import BeautyAd       from "../assets/arts/BeautyAd"
+import ShoppingBanner from "../assets/arts/ShoppingBanner"
+import SportsAd       from "../assets/arts/SportsAd"
+
+const RUBRO_ART = {
+  "Entretenimiento": ConcertPoster,
+  "Restaurantes":    FoodPromo,
+  "Comida":          FoodPromo,
+  "Belleza":         BeautyAd,
+  "Compras":         ShoppingBanner,
+  "Shopping":        ShoppingBanner,
+  "Moda":            ShoppingBanner,
+  "Deportes":        SportsAd,
+  "Fitness":         SportsAd,
+}
 
 const LOCAL_IMAGES = {
   "Restaurantes":   "/images/restaurant.jpg",
@@ -107,12 +125,18 @@ function TarjetaOferta({ oferta, imagenSrc, descuento, user, onComprar }) {
       className="card flex flex-col overflow-hidden group cursor-pointer"
     >
       <div className="relative h-44 overflow-hidden shrink-0">
-        <img
-          src={imagenSrc}
-          alt={oferta.titulo}
-          onError={e => { e.target.src = "/images/food.jpg" }}
-          className={`w-full h-full object-cover transition-transform duration-700 ${hovered ? "scale-110" : "scale-100"}`}
-        />
+        {RUBRO_ART[oferta.rubro] ? (
+          <div className={`w-full h-full transition-transform duration-700 ${hovered ? "scale-105" : "scale-100"}`}>
+            {(() => { const A = RUBRO_ART[oferta.rubro]; return <A width="100%" height="100%" /> })()}
+          </div>
+        ) : (
+          <img
+            src={imagenSrc}
+            alt={oferta.titulo}
+            onError={e => { e.target.src = "/images/food.jpg" }}
+            className={`w-full h-full object-cover transition-transform duration-700 ${hovered ? "scale-110" : "scale-100"}`}
+          />
+        )}
         <div className="absolute inset-0"
              style={{ background: "linear-gradient(to top, rgba(7,9,15,0.95) 0%, rgba(7,9,15,0.3) 50%, transparent 100%)" }} />
 
@@ -282,41 +306,9 @@ export default function MostrarOfertas() {
     <div className="page-bg min-h-screen py-10 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
 
-        <section className="relative rounded-3xl overflow-hidden mb-12 min-h-[260px] sm:min-h-[300px] flex items-stretch animate-fade-in"
+        <section className="relative rounded-3xl overflow-hidden mb-12 animate-fade-in"
                  style={{ border:"1px solid rgba(124,58,237,0.2)" }}>
-          <img src="/images/hero-main.jpg" alt=""
-               className="absolute inset-0 w-full h-full object-cover opacity-15" />
-          <div className="absolute inset-0"
-               style={{ background:"linear-gradient(110deg, rgba(7,9,15,0.98) 0%, rgba(7,9,15,0.85) 50%, rgba(124,58,237,0.08) 100%)" }} />
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute top-0 right-0 w-96 h-96 opacity-20 animate-glow-pulse"
-                 style={{ background:"radial-gradient(circle, #7C3AED, transparent 70%)", transform:"translate(20%,-20%)" }} />
-            <div className="absolute bottom-0 right-1/3 w-64 h-64 opacity-15"
-                 style={{ background:"radial-gradient(circle, #06B6D4, transparent 70%)", transform:"translateY(30%)" }} />
-          </div>
-
-          <div className="relative z-10 px-8 sm:px-14 py-12 max-w-2xl flex flex-col justify-center gap-5">
-            <div className="badge badge-purple w-fit text-xs">
-              <span className="glow-dot glow-dot-purple" />
-              {total} ofertas activas
-            </div>
-            <h1 className="font-heading text-4xl sm:text-5xl font-bold text-white leading-tight">
-              Descuentos para<br />
-              <span className="text-grad">cada ocasión</span>
-            </h1>
-            <p className="text-white/45 text-sm sm:text-base leading-relaxed max-w-md">
-              Explora cupones exclusivos en restaurantes, entretenimiento y servicios.{" "}
-              <span style={{ color:"#22D3EE" }}>Sin registro para ver las ofertas.</span>
-            </p>
-            {!user && (
-              <div className="flex flex-col sm:flex-row gap-3 pt-1">
-                <Link to="/registro" className="btn-primary text-sm py-3 px-6">
-                  Crear cuenta gratis <IcArrow />
-                </Link>
-                <Link to="/login" className="btn-ghost text-sm py-3 px-6">Ya tengo cuenta</Link>
-              </div>
-            )}
-          </div>
+          <HeroBanner width="100%" height="100%" />
         </section>
 
         <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between mb-6">
@@ -366,6 +358,16 @@ export default function MostrarOfertas() {
                 </button>
               ))}
             </div>
+
+            {rubroActivo && RUBRO_ART[rubroActivo] && !busqueda && (() => {
+              const ArtComp = RUBRO_ART[rubroActivo]
+              return (
+                <div className="mb-8 rounded-2xl overflow-hidden animate-fade-in"
+                     style={{ border:"1px solid rgba(255,255,255,0.07)", height:"220px" }}>
+                  <ArtComp width="100%" height="100%" />
+                </div>
+              )
+            })()}
 
             {busqueda && (
               <p className="text-sm text-white/35 mb-5">

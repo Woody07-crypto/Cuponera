@@ -21,7 +21,7 @@ export default function CompraForm({ oferta, formatFecha, onClose }) {
       ? oferta.cantidadLimite - (oferta.cuponesVendidos || 0)
       : 10;
 
-  // ✅ AQUÍ agregamos control correcto
+  
   const handleSubmit = async (e) => {
     e.preventDefault();
 

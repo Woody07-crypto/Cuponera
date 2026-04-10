@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { auth, db } from "../firebase/config";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { doc, setDoc } from "firebase/firestore";
+import { doc, writeBatch } from "firebase/firestore";
+import { ROLES } from "../services/perfilService";
 import { useNavigate, Link } from "react-router-dom";
 
 const EyeIcon = () => (
@@ -46,11 +47,23 @@ export default function Registro() {
     setLoading(true);
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, form.correo, form.password);
-      await setDoc(doc(db, "clientes", userCredential.user.uid), {
-        nombres: form.nombres, apellidos: form.apellidos,
-        telefono: form.telefono, correo: form.correo,
-        direccion: form.direccion, dui: form.dui, role: "cliente"
+      const uid = userCredential.user.uid;
+      const batch = writeBatch(db);
+      batch.set(doc(db, "clientes", uid), {
+        nombres: form.nombres,
+        apellidos: form.apellidos,
+        telefono: form.telefono,
+        correo: form.correo,
+        direccion: form.direccion,
+        dui: form.dui,
       });
+      batch.set(doc(db, "perfiles", uid), {
+        role: ROLES.CLIENTE,
+        correo: form.correo,
+        nombres: form.nombres,
+        apellidos: form.apellidos,
+      });
+      await batch.commit();
       navigate("/comprar");
     } catch (err) {
       if (err.code === "auth/email-already-in-use") setError("Este correo ya está registrado.");

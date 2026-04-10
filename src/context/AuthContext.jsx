@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from "react";
 import { auth, db } from "../firebase/config";
 import { onAuthStateChanged, signOut } from "firebase/auth";
-import { doc, getDoc } from "firebase/firestore";
+import { fetchRoleAndProfile } from "../services/perfilService";
 
 const AuthContext = createContext();
 
@@ -37,25 +37,14 @@ export function AuthProvider({ children }) {
 
     (async () => {
       try {
-        const clienteSnap = await getDoc(doc(db, "clientes", user.uid));
+        const { role: r, profile: p } = await fetchRoleAndProfile(
+          db,
+          user.uid,
+          user.email
+        );
         if (cancelled) return;
-        if (clienteSnap.exists()) {
-          setProfile({ id: user.uid, ...clienteSnap.data() });
-          setRole("cliente");
-          return;
-        }
-
-        const perfilSnap = await getDoc(doc(db, "perfiles", user.uid));
-        if (cancelled) return;
-        if (perfilSnap.exists()) {
-          const data = perfilSnap.data();
-          setProfile({ id: user.uid, ...data });
-          setRole(data.role || null);
-          return;
-        }
-
-        setProfile({ id: user.uid, correo: user.email });
-        setRole(null);
+        setProfile(p);
+        setRole(r);
       } catch {
         if (!cancelled) {
           setProfile({ id: user.uid, correo: user.email });

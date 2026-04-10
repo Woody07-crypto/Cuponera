@@ -8,11 +8,14 @@ import Registro from "./components/Registro";
 import Footer from "./components/Footer";
 import Terminos from "./components/Terminos";
 import Privacidad from "./components/Privacidad";
+import AdminPanel from "./components/AdminPanel";
+import GestionOfertasEmpresa from "./components/GestionOfertasEmpresa";
+import CanjearCupon from "./components/CanjearCupon";
 
 
 //  NavBar
 function NavBar() {
-  const { user, logout } = useAuth();
+  const { user, logout, role, profileLoading } = useAuth();
   const [menuAbierto, setMenuAbierto] = useState(false);
 
   return (
@@ -36,12 +39,36 @@ function NavBar() {
             >
               Comprar Cupones
             </Link>
-            {user && (
+            {user && !profileLoading && role === "cliente" && (
               <Link
                 to="/mis-cupones"
                 className="text-gray-300 hover:text-[#709756] transition-colors font-semibold text-sm"
               >
                 Mis Cupones
+              </Link>
+            )}
+            {user && !profileLoading && role === "admin" && (
+              <Link
+                to="/admin"
+                className="text-gray-300 hover:text-[#709756] transition-colors font-semibold text-sm"
+              >
+                Administración
+              </Link>
+            )}
+            {user && !profileLoading && role === "admin_empresa" && (
+              <Link
+                to="/empresa/ofertas"
+                className="text-gray-300 hover:text-[#709756] transition-colors font-semibold text-sm"
+              >
+                Mis ofertas
+              </Link>
+            )}
+            {user && !profileLoading && role === "empleado" && (
+              <Link
+                to="/canjear"
+                className="text-gray-300 hover:text-[#709756] transition-colors font-semibold text-sm"
+              >
+                Canjear cupón
               </Link>
             )}
           </div>
@@ -101,13 +128,40 @@ function NavBar() {
           >
             Comprar Cupones
           </Link>
-          {user && (
+          {user && !profileLoading && role === "cliente" && (
             <Link
               to="/mis-cupones"
               onClick={() => setMenuAbierto(false)}
               className="text-gray-300 hover:text-[#709756] font-semibold text-sm py-2"
             >
               Mis Cupones
+            </Link>
+          )}
+          {user && !profileLoading && role === "admin" && (
+            <Link
+              to="/admin"
+              onClick={() => setMenuAbierto(false)}
+              className="text-gray-300 hover:text-[#709756] font-semibold text-sm py-2"
+            >
+              Administración
+            </Link>
+          )}
+          {user && !profileLoading && role === "admin_empresa" && (
+            <Link
+              to="/empresa/ofertas"
+              onClick={() => setMenuAbierto(false)}
+              className="text-gray-300 hover:text-[#709756] font-semibold text-sm py-2"
+            >
+              Mis ofertas
+            </Link>
+          )}
+          {user && !profileLoading && role === "empleado" && (
+            <Link
+              to="/canjear"
+              onClick={() => setMenuAbierto(false)}
+              className="text-gray-300 hover:text-[#709756] font-semibold text-sm py-2"
+            >
+              Canjear cupón
             </Link>
           )}
           <div className="border-t border-gray-700 pt-3 flex flex-col gap-2">
@@ -153,6 +207,20 @@ function RutaProtegida({ children }) {
   return user ? children : <Navigate to="/login" replace />;
 }
 
+function RutaPorRol({ children, roles }) {
+  const { user, role, loading, profileLoading } = useAuth();
+  if (loading || (user && profileLoading)) {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center text-[#ACCC7B] text-sm font-medium">
+        Cargando sesión…
+      </div>
+    );
+  }
+  if (!user) return <Navigate to="/login" replace />;
+  if (!roles.includes(role)) return <Navigate to="/comprar" replace />;
+  return children;
+}
+
 
 function App() {
   return (
@@ -174,7 +242,39 @@ function App() {
                 path="/mis-cupones"
                 element={
                   <RutaProtegida>
-                    <CouponsDashboard />
+                    <RutaPorRol roles={["cliente"]}>
+                      <CouponsDashboard />
+                    </RutaPorRol>
+                  </RutaProtegida>
+                }
+              />
+              <Route
+                path="/admin"
+                element={
+                  <RutaProtegida>
+                    <RutaPorRol roles={["admin"]}>
+                      <AdminPanel />
+                    </RutaPorRol>
+                  </RutaProtegida>
+                }
+              />
+              <Route
+                path="/empresa/ofertas"
+                element={
+                  <RutaProtegida>
+                    <RutaPorRol roles={["admin_empresa"]}>
+                      <GestionOfertasEmpresa />
+                    </RutaPorRol>
+                  </RutaProtegida>
+                }
+              />
+              <Route
+                path="/canjear"
+                element={
+                  <RutaProtegida>
+                    <RutaPorRol roles={["empleado"]}>
+                      <CanjearCupon />
+                    </RutaPorRol>
                   </RutaProtegida>
                 }
               />

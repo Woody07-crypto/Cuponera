@@ -12,6 +12,13 @@ dist
 dist-ssr
 *.local
 
+# Caché local de Firebase CLI (no compartir en el repo)
+.firebase/
+
+# Cuenta de servicio Firebase (nunca commitear)
+*-firebase-adminsdk-*.json
+serviceAccount*.json
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { auth } from "../firebase/config";
+import { auth, db } from "../firebase/config";
 import { signInWithEmailAndPassword } from "firebase/auth";
+import { fetchRoleAndProfile, rutaTrasLogin } from "../services/perfilService";
 import { useNavigate, Link } from "react-router-dom";
 
 const EyeIcon = () => (
@@ -28,8 +29,13 @@ export default function Login() {
     setError("");
     setLoading(true);
     try {
-      await signInWithEmailAndPassword(auth, email, password);
-      navigate("/mis-cupones");
+      const cred = await signInWithEmailAndPassword(auth, email, password);
+      const { role: r } = await fetchRoleAndProfile(
+        db,
+        cred.user.uid,
+        cred.user.email
+      );
+      navigate(rutaTrasLogin(r));
     } catch (err) {
       setError("Correo o contraseña incorrectos.");
     } finally {

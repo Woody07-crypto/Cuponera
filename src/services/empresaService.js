@@ -13,11 +13,52 @@ import {
 } from "firebase/firestore";
 
 const CODIGO_EMPRESA = /^[A-Za-z]{3}\d{3}$/;
+const ZERO_WIDTH = /[\u200B-\u200D\uFEFF]/g;
+
+/** Alinea textos para comparar nombres (espacios raros, mayúsculas). */
+export function normalizarNombreEmpresaBusqueda(s) {
+  return String(s ?? "")
+    .replace(ZERO_WIDTH, "")
+    .replace(/\u00A0/g, " ")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+/** Nombre comercial en la oferta (Firestore a veces usa distintas claves). */
+export function nombreEmpresaEnOferta(oferta) {
+  if (!oferta || typeof oferta !== "object") return "";
+  const n = oferta.nombreEmpresa ?? oferta.NombreEmpresa ?? oferta.nombre ?? "";
+  return String(n).replace(ZERO_WIDTH, "").trim();
+}
 
 export function validarCodigoEmpresa(codigo) {
-  const c = (codigo || "").trim().toUpperCase();
+  let c = String(codigo ?? "")
+    .replace(ZERO_WIDTH, "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
   if (!CODIGO_EMPRESA.test(c)) return { ok: false, error: "Código: 3 letras + 3 dígitos (ej. ABC001)." };
   return { ok: true, value: c };
+}
+
+/** Lee el código desde el documento aunque el campo venga con otro nombre o tipo. */
+export function leerCodigoEmpresaDeData(data) {
+  if (!data || typeof data !== "object") return null;
+  const raw = data.codigoEmpresa ?? data.CodigoEmpresa ?? data.codigo_empresa;
+  if (raw == null || raw === "") return null;
+  const v = validarCodigoEmpresa(raw);
+  return v.ok ? v.value : null;
+}
+
+/** Firestore a veces guarda empresaId como string o como referencia. */
+function empresaIdAString(empresaId) {
+  if (empresaId == null || empresaId === "") return null;
+  if (typeof empresaId === "string") return empresaId;
+  if (typeof empresaId === "object" && typeof empresaId.id === "string") return empresaId.id;
+  return null;
 }
 
 export function normalizarDui(dui) {
@@ -72,23 +113,41 @@ export async function eliminarEmpresa(db, empresaId) {
  * Busca codigoEmpresa en `empresas` por nombre (exacto y luego sin distinguir mayúsculas).
  * Si hay varios documentos con el mismo nombre, usa el primero que tenga código válido.
  */
+async function codigoEmpresaDesdeCorreo(db, correoRaw) {
+  const trimmed = String(correoRaw ?? "").trim();
+  if (!trimmed || !trimmed.includes("@")) return null;
+  const variants = [...new Set([trimmed, trimmed.toLowerCase()])];
+  for (const correo of variants) {
+    const q = query(collection(db, "empresas"), where("correo", "==", correo), limit(1));
+    const qs = await getDocs(q);
+    if (!qs.empty) {
+      const c = leerCodigoEmpresaDeData(qs.docs[0].data());
+      if (c) return c;
+    }
+  }
+  return null;
+}
+
 async function codigoEmpresaDesdeNombre(db, nombreRaw) {
-  const nombre = (nombreRaw || "").trim();
+  const nombre = String(nombreRaw ?? "")
+    .replace(ZERO_WIDTH, "")
+    .trim();
   if (!nombre) return null;
   const q = query(collection(db, "empresas"), where("nombre", "==", nombre), limit(1));
   const qs = await getDocs(q);
   if (!qs.empty) {
-    const v = validarCodigoEmpresa(qs.docs[0].data()?.codigoEmpresa);
-    if (v.ok) return v.value;
+    const c = leerCodigoEmpresaDeData(qs.docs[0].data());
+    if (c) return c;
   }
+  const needle = normalizarNombreEmpresaBusqueda(nombre);
+  if (!needle) return null;
   const todas = await getDocs(collection(db, "empresas"));
-  const needle = nombre.toLowerCase();
   const coinciden = todas.docs.filter(
-    (d) => (d.data()?.nombre || "").trim().toLowerCase() === needle
+    (d) => normalizarNombreEmpresaBusqueda(d.data()?.nombre) === needle
   );
   for (const d of coinciden) {
-    const v = validarCodigoEmpresa(d.data()?.codigoEmpresa);
-    if (v.ok) return v.value;
+    const c = leerCodigoEmpresaDeData(d.data());
+    if (c) return c;
   }
   return null;
 }
@@ -97,18 +156,45 @@ async function codigoEmpresaDesdeNombre(db, nombreRaw) {
  * Resuelve el código AAA000 de la empresa asociada a una oferta (catálogo / compra).
  */
 export async function obtenerCodigoEmpresaParaOferta(db, oferta) {
-  if (oferta?.codigoEmpresa) {
-    const v = validarCodigoEmpresa(oferta.codigoEmpresa);
-    if (v.ok) return v.value;
+  const deOferta = leerCodigoEmpresaDeData(oferta);
+  if (deOferta) return deOferta;
+
+  if (oferta?.correoEmpresa) {
+    const porCorreo = await codigoEmpresaDesdeCorreo(db, oferta.correoEmpresa);
+    if (porCorreo) return porCorreo;
   }
-  if (oferta?.empresaId) {
-    const snap = await getDoc(doc(db, "empresas", oferta.empresaId));
+
+  const eid = empresaIdAString(oferta?.empresaId);
+  if (eid) {
+    const snap = await getDoc(doc(db, "empresas", eid));
     if (snap.exists()) {
-      const v = validarCodigoEmpresa(snap.data()?.codigoEmpresa);
-      if (v.ok) return v.value;
-      const porNombreDoc = await codigoEmpresaDesdeNombre(db, snap.data()?.nombre);
+      const data = snap.data();
+      const delDoc = leerCodigoEmpresaDeData(data);
+      if (delDoc) return delDoc;
+      const porNombreDoc = await codigoEmpresaDesdeNombre(db, data?.nombre);
       if (porNombreDoc) return porNombreDoc;
     }
   }
-  return codigoEmpresaDesdeNombre(db, oferta?.nombreEmpresa);
+
+  return codigoEmpresaDesdeNombre(db, nombreEmpresaEnOferta(oferta));
+}
+
+/**
+ * Busca el id del documento en `empresas` por nombre (exacto o normalizado).
+ */
+export async function buscarEmpresaIdPorNombre(db, nombreRaw) {
+  const nombre = String(nombreRaw ?? "")
+    .replace(ZERO_WIDTH, "")
+    .trim();
+  if (!nombre) return null;
+  const q = query(collection(db, "empresas"), where("nombre", "==", nombre), limit(1));
+  const qs = await getDocs(q);
+  if (!qs.empty) return qs.docs[0].id;
+  const needle = normalizarNombreEmpresaBusqueda(nombre);
+  if (!needle) return null;
+  const todas = await getDocs(collection(db, "empresas"));
+  const hit = todas.docs.find(
+    (d) => normalizarNombreEmpresaBusqueda(d.data()?.nombre) === needle
+  );
+  return hit ? hit.id : null;
 }

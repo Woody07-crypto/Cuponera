@@ -21,7 +21,7 @@ import {
   upsertEmpleadoPerfil,
   quitarEmpleadoPerfil,
 } from "../services/empleadoEmpresaService";
-import { validarCodigoEmpresa } from "../services/empresaService";
+import { leerCodigoEmpresaDeData } from "../services/empresaService";
 
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 
@@ -255,14 +255,17 @@ export default function GestionOfertasEmpresa() {
     try {
       let nombreEmpresaFinal = (nombreEmpresa || "").trim();
       let codigoEmpresaOferta;
+      let correoEmpresaOferta;
       if (empresaId) {
         const empresaSnap = await getDoc(doc(db, "empresas", empresaId));
         if (empresaSnap.exists()) {
           const d = empresaSnap.data();
           const n = (d.nombre || "").trim();
           if (n) nombreEmpresaFinal = n;
-          const v = validarCodigoEmpresa(d.codigoEmpresa);
-          if (v.ok) codigoEmpresaOferta = v.value;
+          const c = leerCodigoEmpresaDeData(d);
+          if (c) codigoEmpresaOferta = c;
+          const em = (d.correo || "").trim();
+          if (em) correoEmpresaOferta = em;
         }
       }
       if (!nombreEmpresaFinal) nombreEmpresaFinal = form.titulo.trim();
@@ -285,6 +288,7 @@ export default function GestionOfertasEmpresa() {
         estado: editId ? undefined : "pendiente",
       };
       if (codigoEmpresaOferta) payload.codigoEmpresa = codigoEmpresaOferta;
+      if (correoEmpresaOferta) payload.correoEmpresa = correoEmpresaOferta;
 
       if (editId) {
         const refDoc = doc(db, "ofertas", editId);

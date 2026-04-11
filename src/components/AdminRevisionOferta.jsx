@@ -1,7 +1,11 @@
 import { useState } from "react"
 import { doc, updateDoc, deleteField, getDoc } from "firebase/firestore"
 import { db } from "../firebase/config"
-import { validarCodigoEmpresa } from "../services/empresaService"
+import {
+  buscarEmpresaIdPorNombre,
+  leerCodigoEmpresaDeData,
+  nombreEmpresaEnOferta,
+} from "../services/empresaService"
 import { useToast } from "./ui/Toast"
 
 const IcX = () => (
@@ -28,15 +32,29 @@ export default function AdminRevisionOferta({ oferta, formatFecha, onClose, onRe
         estado: "aprobada",
         justificacionRechazo: deleteField(),
       }
-      if (oferta.empresaId) {
+      let empresaIdSync = oferta.empresaId || null
+      if (empresaIdSync && typeof empresaIdSync === "object" && empresaIdSync.id) {
+        empresaIdSync = empresaIdSync.id
+      }
+      if (!empresaIdSync) {
         try {
-          const empresaSnap = await getDoc(doc(db, "empresas", oferta.empresaId))
+          empresaIdSync = await buscarEmpresaIdPorNombre(db, nombreEmpresaEnOferta(oferta))
+        } catch (e) {
+          console.error(e)
+        }
+      }
+      if (empresaIdSync) {
+        updates.empresaId = empresaIdSync
+        try {
+          const empresaSnap = await getDoc(doc(db, "empresas", empresaIdSync))
           if (empresaSnap.exists()) {
             const d = empresaSnap.data()
             const n = (d.nombre || "").trim()
             if (n) updates.nombreEmpresa = n
-            const v = validarCodigoEmpresa(d.codigoEmpresa)
-            if (v.ok) updates.codigoEmpresa = v.value
+            const c = leerCodigoEmpresaDeData(d)
+            if (c) updates.codigoEmpresa = c
+            const em = (d.correo || "").trim()
+            if (em) updates.correoEmpresa = em
           }
         } catch (e) {
           console.error(e)

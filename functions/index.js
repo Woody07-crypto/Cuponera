@@ -96,6 +96,126 @@ export const canjearCupon = onCall(async (request) => {
   return { ok: true, titulo: cupon.titulo, codigo: cupon.codigo };
 });
 
+const CODIGO_EMPRESA_RE = /^[A-Za-z]{3}\d{3}$/;
+const ZW = /[\u200B-\u200D\uFEFF]/g;
+
+function normNombreAdmin(s) {
+  return String(s ?? "")
+    .replace(ZW, "")
+    .replace(/\u00A0/g, " ")
+    .trim()
+    .replace(/\s+/g, " ")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+}
+
+function parseCodigoEmpresaAdmin(raw) {
+  const c = String(raw ?? "")
+    .replace(ZW, "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "");
+  return CODIGO_EMPRESA_RE.test(c) ? c : null;
+}
+
+function leerCodigoEmpresaDataAdmin(data) {
+  if (!data || typeof data !== "object") return null;
+  const raw = data.codigoEmpresa ?? data.CodigoEmpresa ?? data.codigo_empresa;
+  if (raw == null || raw === "") return null;
+  return parseCodigoEmpresaAdmin(raw);
+}
+
+async function codigoPorCorreoAdmin(correoRaw) {
+  const trimmed = String(correoRaw ?? "").trim();
+  if (!trimmed || !trimmed.includes("@")) return null;
+  for (const c of [...new Set([trimmed, trimmed.toLowerCase()])]) {
+    const q = await db.collection("empresas").where("correo", "==", c).limit(1).get();
+    if (!q.empty) {
+      const x = leerCodigoEmpresaDataAdmin(q.docs[0].data());
+      if (x) return x;
+    }
+  }
+  return null;
+}
+
+async function codigoPorNombreAdmin(nombreRaw) {
+  const nombre = String(nombreRaw ?? "").replace(ZW, "").trim();
+  if (!nombre) return null;
+  let q = await db.collection("empresas").where("nombre", "==", nombre).limit(1).get();
+  if (!q.empty) {
+    const x = leerCodigoEmpresaDataAdmin(q.docs[0].data());
+    if (x) return x;
+  }
+  const needle = normNombreAdmin(nombre);
+  if (!needle) return null;
+  const all = await db.collection("empresas").get();
+  for (const d of all.docs) {
+    if (normNombreAdmin(d.data()?.nombre) === needle) {
+      const x = leerCodigoEmpresaDataAdmin(d.data());
+      if (x) return x;
+    }
+  }
+  return null;
+}
+
+async function resolverCodigoEmpresaDesdeOfertaAdmin(oferta) {
+  let c = leerCodigoEmpresaDataAdmin(oferta);
+  if (c) return c;
+  if (oferta.correoEmpresa) {
+    c = await codigoPorCorreoAdmin(oferta.correoEmpresa);
+    if (c) return c;
+  }
+  let eid = oferta.empresaId;
+  if (eid && typeof eid === "object" && eid.id) eid = eid.id;
+  if (eid) {
+    const es = await db.collection("empresas").doc(String(eid)).get();
+    if (es.exists) {
+      const d = es.data();
+      c = leerCodigoEmpresaDataAdmin(d);
+      if (c) return c;
+      c = await codigoPorNombreAdmin(d?.nombre);
+      if (c) return c;
+    }
+  }
+  const nom = String(
+    oferta.nombreEmpresa ?? oferta.NombreEmpresa ?? ""
+  )
+    .replace(ZW, "")
+    .trim();
+  return codigoPorNombreAdmin(nom);
+}
+
+/**
+ * Resuelve el prefijo de cupón (p. ej. EVS001) con privilegios de admin.
+ * Evita fallos si el cliente no puede listar `empresas` o hay datos desincronizados.
+ */
+export const resolverCodigoEmpresaCompra = onCall(async (request) => {
+  if (!request.auth?.uid) {
+    throw new HttpsError("unauthenticated", "Iniciá sesión para comprar.");
+  }
+  const ofertaId = String(request.data?.ofertaId || "").trim();
+  if (!ofertaId) {
+    throw new HttpsError("invalid-argument", "ofertaId requerido.");
+  }
+  const ofertaSnap = await db.collection("ofertas").doc(ofertaId).get();
+  if (!ofertaSnap.exists) {
+    throw new HttpsError("not-found", "Oferta no encontrada.");
+  }
+  const oferta = ofertaSnap.data();
+  if (oferta.estado !== "aprobada") {
+    throw new HttpsError("failed-precondition", "Esta oferta no está disponible para compra.");
+  }
+  const codigoEmpresa = await resolverCodigoEmpresaDesdeOfertaAdmin(oferta);
+  if (!codigoEmpresa) {
+    throw new HttpsError(
+      "failed-precondition",
+      "La empresa no tiene código de cupón (formato ABC123) configurado en Firestore."
+    );
+  }
+  return { codigoEmpresa };
+});
+
 /**
  * Cola para la extensión oficial "Trigger Email from Firestore" (colección `mail`).
  * Si la extensión no está instalada, los documentos quedan creados sin efecto visible.

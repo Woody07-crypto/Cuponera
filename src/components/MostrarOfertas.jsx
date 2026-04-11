@@ -4,6 +4,7 @@ import { db } from "../firebase/config"
 import { useAuth } from "../context/AuthContext"
 import { Link } from "react-router-dom"
 import CompraForm from "./CompraForm"
+import AdminRevisionOferta from "./AdminRevisionOferta"
 import { SkeletonGrid } from "./ui/SkeletonCard"
 
 const LOCAL_IMAGES = {
@@ -91,7 +92,7 @@ const IcTag = () => (
   </svg>
 )
 
-function TarjetaOferta({ oferta, imagenSrc, descuento, user, onComprar }) {
+function TarjetaOferta({ oferta, imagenSrc, descuento, user, onComprar, modoAdmin }) {
   const [hovered, setHovered] = useState(false)
   const disponibles = oferta.cantidadLimite != null
     ? oferta.cantidadLimite - (oferta.cuponesVendidos || 0)
@@ -116,12 +117,19 @@ function TarjetaOferta({ oferta, imagenSrc, descuento, user, onComprar }) {
         <div className="absolute inset-0"
              style={{ background: "linear-gradient(to top, rgba(7,9,15,0.95) 0%, rgba(7,9,15,0.3) 50%, transparent 100%)" }} />
 
-        {descuento > 0 && (
-          <div className="absolute top-3 right-3 px-2.5 py-1 rounded-lg text-xs font-black text-white"
-               style={{ background:"linear-gradient(135deg,#7C3AED,#06B6D4)", boxShadow:"0 2px 12px rgba(124,58,237,0.5)" }}>
-            -{descuento}%
-          </div>
-        )}
+        <div className="absolute top-3 right-3 flex flex-col gap-2 items-end z-[1]">
+          {modoAdmin && (
+            <span className="px-2.5 py-1 rounded-lg text-[0.65rem] font-bold uppercase tracking-wide text-amber-100 border border-amber-400/35 bg-amber-950/80 backdrop-blur-sm">
+              Pendiente
+            </span>
+          )}
+          {descuento > 0 && (
+            <div className="px-2.5 py-1 rounded-lg text-xs font-black text-white"
+                 style={{ background:"linear-gradient(135deg,#7C3AED,#06B6D4)", boxShadow:"0 2px 12px rgba(124,58,237,0.5)" }}>
+              -{descuento}%
+            </div>
+          )}
+        </div>
 
         {oferta.rubro && (
           <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-white/70"
@@ -184,8 +192,12 @@ function TarjetaOferta({ oferta, imagenSrc, descuento, user, onComprar }) {
           )}
         </div>
 
-        {user ? (
-          <button onClick={onComprar} className="btn-primary w-full mt-auto py-2.5 text-sm">
+        {modoAdmin ? (
+          <button type="button" onClick={onComprar} className="btn-primary w-full mt-auto py-2.5 text-sm">
+            Revisar oferta <IcArrow />
+          </button>
+        ) : user ? (
+          <button type="button" onClick={onComprar} className="btn-primary w-full mt-auto py-2.5 text-sm">
             Comprar cupón <IcArrow />
           </button>
         ) : (
@@ -206,7 +218,9 @@ function TarjetaOferta({ oferta, imagenSrc, descuento, user, onComprar }) {
 }
 
 export default function MostrarOfertas() {
-  const { user } = useAuth()
+  const { user, role, profileLoading } = useAuth()
+  const vistaAprobacion = role === "admin" && !!user
+
   const [ofertasPorRubro, setOfertasPorRubro] = useState({})
   const [rubroActivo,     setRubroActivo]     = useState(null)
   const [seleccionada,    setSeleccionada]    = useState(null)
@@ -214,34 +228,60 @@ export default function MostrarOfertas() {
   const [error,           setError]           = useState(null)
   const [busqueda,        setBusqueda]        = useState("")
 
-  useEffect(() => { cargarOfertas() }, [])
+  useEffect(() => {
+    if (user && profileLoading) return
+    cargarOfertas()
+  }, [user, role, profileLoading])
 
   async function cargarOfertas() {
     try {
       setLoading(true)
-      const q   = query(collection(db,"ofertas"), where("estado","==","aprobada"))
+      setError(null)
+
+      if (role === "admin" && user) {
+        const q = query(collection(db, "ofertas"), where("estado", "==", "pendiente"))
+        const snap = await getDocs(q)
+        const agruped = {}
+        snap.forEach((docSnap) => {
+          const o = { id: docSnap.id, ...docSnap.data() }
+          const ini = o.fechaInicio?.toDate ? o.fechaInicio.toDate() : new Date(o.fechaInicio)
+          const fin = o.fechaFin?.toDate ? o.fechaFin.toDate() : new Date(o.fechaFin)
+          const r = o.rubro || "Otros"
+          if (!agruped[r]) agruped[r] = []
+          agruped[r].push({ ...o, fechaInicio: ini, fechaFin: fin })
+        })
+        setOfertasPorRubro(agruped)
+        const rubros = Object.keys(agruped)
+        setRubroActivo(rubros.length ? rubros[0] : null)
+        return
+      }
+
+      const q = query(collection(db, "ofertas"), where("estado", "==", "aprobada"))
       const snap = await getDocs(q)
       const agruped = {}
-      const hoy  = new Date()
-      snap.forEach(docSnap => {
+      const hoy = new Date()
+      snap.forEach((docSnap) => {
         const o = { id: docSnap.id, ...docSnap.data() }
         const ini = o.fechaInicio?.toDate ? o.fechaInicio.toDate() : new Date(o.fechaInicio)
-        const fin = o.fechaFin?.toDate    ? o.fechaFin.toDate()    : new Date(o.fechaFin)
+        const fin = o.fechaFin?.toDate ? o.fechaFin.toDate() : new Date(o.fechaFin)
         if (ini > hoy || fin < hoy) return
-        if (o.cantidadLimite != null && (o.cuponesVendidos||0) >= o.cantidadLimite) return
+        if (o.cantidadLimite != null && (o.cuponesVendidos || 0) >= o.cantidadLimite) return
         const r = o.rubro || "Otros"
         if (!agruped[r]) agruped[r] = []
-        agruped[r].push({ ...o, fechaInicio:ini, fechaFin:fin })
+        agruped[r].push({ ...o, fechaInicio: ini, fechaFin: fin })
       })
       setOfertasPorRubro(agruped)
       const rubros = Object.keys(agruped)
       if (rubros.length) setRubroActivo(rubros[0])
-    } catch { setError("No se pudieron cargar las ofertas.") }
-    finally  { setLoading(false) }
+    } catch {
+      setError("No se pudieron cargar las ofertas.")
+    } finally {
+      setLoading(false)
+    }
   }
 
   const rubros = Object.keys(ofertasPorRubro)
-  const total  = rubros.reduce((a,r) => a + ofertasPorRubro[r].length, 0)
+  const total = rubros.reduce((a, r) => a + ofertasPorRubro[r].length, 0)
 
   const ofertasFiltradas = useMemo(() => {
     if (!rubroActivo || !ofertasPorRubro[rubroActivo]) return []
@@ -253,6 +293,18 @@ export default function MostrarOfertas() {
       o.nombreEmpresa?.toLowerCase().includes(q)
     )
   }, [rubroActivo, ofertasPorRubro, busqueda])
+
+  if (user && profileLoading) {
+    return (
+      <div className="page-bg min-h-screen py-10 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="skeleton h-64 rounded-3xl mb-10" />
+          <div className="flex gap-2 mb-8">{[1, 2, 3, 4].map((i) => <div key={i} className="skeleton h-9 w-28 rounded-xl" />)}</div>
+          <SkeletonGrid count={6} />
+        </div>
+      </div>
+    )
+  }
 
   if (loading) {
     return (
@@ -298,23 +350,54 @@ export default function MostrarOfertas() {
           <div className="relative z-10 px-8 sm:px-14 py-12 max-w-2xl flex flex-col justify-center gap-5">
             <div className="badge badge-purple w-fit text-xs">
               <span className="glow-dot glow-dot-purple" />
-              {total} ofertas activas
+              {vistaAprobacion
+                ? `${total} pendiente${total !== 1 ? "s" : ""} de revisión`
+                : `${total} ofertas activas`}
             </div>
             <h1 className="font-heading text-4xl sm:text-5xl font-bold text-white leading-tight">
-              Descuentos para<br />
-              <span className="text-grad">cada ocasión</span>
+              {vistaAprobacion ? (
+                <>
+                  Aprobación de<br />
+                  <span className="text-grad">ofertas</span>
+                </>
+              ) : (
+                <>
+                  Descuentos para<br />
+                  <span className="text-grad">cada ocasión</span>
+                </>
+              )}
             </h1>
             <p className="text-white/45 text-sm sm:text-base leading-relaxed max-w-md">
-              Explora cupones exclusivos en restaurantes, entretenimiento y servicios.{" "}
-              <span style={{ color:"#22D3EE" }}>Sin registro para ver las ofertas.</span>
+              {vistaAprobacion ? (
+                <>
+                  Revisa las promociones enviadas por las empresas.{" "}
+                  <span style={{ color: "#22D3EE" }}>Aprueba</span> para publicarlas en la tienda o{" "}
+                  <span style={{ color: "#F87171" }}>rechaza</span> con una justificación clara.
+                </>
+              ) : (
+                <>
+                  Explora cupones exclusivos en restaurantes, entretenimiento y servicios.{" "}
+                  <span style={{ color: "#22D3EE" }}>Sin registro para ver las ofertas.</span>
+                </>
+              )}
             </p>
-            {!user && (
+            {vistaAprobacion ? (
               <div className="flex flex-col sm:flex-row gap-3 pt-1">
-                <Link to="/registro" className="btn-primary text-sm py-3 px-6">
-                  Crear cuenta gratis <IcArrow />
+                <Link to="/admin" className="btn-ghost text-sm py-3 px-6">
+                  Ir al panel admin
                 </Link>
-                <Link to="/login" className="btn-ghost text-sm py-3 px-6">Ya tengo cuenta</Link>
               </div>
+            ) : (
+              !user && (
+                <div className="flex flex-col sm:flex-row gap-3 pt-1">
+                  <Link to="/registro" className="btn-primary text-sm py-3 px-6">
+                    Crear cuenta gratis <IcArrow />
+                  </Link>
+                  <Link to="/login" className="btn-ghost text-sm py-3 px-6">
+                    Ya tengo cuenta
+                  </Link>
+                </div>
+              )
             )}
           </div>
         </section>
@@ -338,11 +421,16 @@ export default function MostrarOfertas() {
         </div>
 
         {rubros.length === 0 ? (
-          <div className="py-20 text-center rounded-3xl"
-               style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.06)" }}>
-            <div className="text-5xl mb-4">🎫</div>
-            <p className="text-white/50 font-medium">Sin ofertas disponibles por ahora</p>
-            <p className="text-white/25 text-sm mt-1">Vuelve pronto para ver nuevos descuentos</p>
+          <div className="py-20 px-6 text-center rounded-3xl glass border border-white/[0.08] shadow-glass">
+            <div className="text-5xl mb-4">{vistaAprobacion ? "📋" : "🎫"}</div>
+            <p className="text-white/50 font-medium">
+              {vistaAprobacion ? "Sin ofertas pendientes de aprobación" : "Sin ofertas disponibles por ahora"}
+            </p>
+            <p className="text-white/25 text-sm mt-1">
+              {vistaAprobacion
+                ? "Cuando una empresa registre una nueva promoción, aparecerá aquí para tu revisión."
+                : "Vuelve pronto para ver nuevos descuentos"}
+            </p>
           </div>
         ) : (
           <>
@@ -384,16 +472,17 @@ export default function MostrarOfertas() {
                       imagenSrc={getImagen(oferta)}
                       descuento={calcularDescuento(oferta.precioRegular, oferta.precioOferta)}
                       user={user}
+                      modoAdmin={vistaAprobacion}
                       onComprar={() => setSeleccionada(oferta)}
                     />
                   </div>
                 ))}
               </div>
             ) : (
-              <div className="py-20 text-center animate-fade-in">
+              <div className="py-16 px-6 text-center rounded-3xl animate-fade-in glass border border-white/[0.08] shadow-glass">
                 <div className="text-4xl mb-3">🔍</div>
                 <p className="text-white/45">Sin resultados para "{busqueda}"</p>
-                <button onClick={() => setBusqueda("")} className="btn-ghost text-sm mt-4 py-2 px-5">
+                <button type="button" onClick={() => setBusqueda("")} className="btn-ghost text-sm mt-4 py-2 px-5">
                   Limpiar búsqueda
                 </button>
               </div>
@@ -402,8 +491,16 @@ export default function MostrarOfertas() {
         )}
       </div>
 
-      {seleccionada && user && (
+      {seleccionada && user && !vistaAprobacion && (
         <CompraForm oferta={seleccionada} formatFecha={formatFecha} onClose={() => setSeleccionada(null)} />
+      )}
+      {seleccionada && vistaAprobacion && (
+        <AdminRevisionOferta
+          oferta={seleccionada}
+          formatFecha={formatFecha}
+          onClose={() => setSeleccionada(null)}
+          onResuelto={cargarOfertas}
+        />
       )}
     </div>
   )

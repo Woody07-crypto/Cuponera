@@ -1,299 +1,410 @@
-import { useState, useEffect } from "react";
-import { collection, getDocs, query, where } from "firebase/firestore";
-import { db } from "../firebase/config";
-import { useAuth } from "../context/AuthContext";
-import { Link } from "react-router-dom";
-import CompraForm from "./CompraForm";
+import { useState, useEffect, useMemo } from "react"
+import { collection, getDocs, query, where } from "firebase/firestore"
+import { db } from "../firebase/config"
+import { useAuth } from "../context/AuthContext"
+import { Link } from "react-router-dom"
+import CompraForm from "./CompraForm"
+import { SkeletonGrid } from "./ui/SkeletonCard"
 
-const OFERTA_FALLBACK_IMAGES = [
-  "https://images.unsplash.com/photo-1607082348824-0a96f2a4b9da?w=800&q=80",
-  "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d?w=800&q=80",
-  "https://images.unsplash.com/photo-1441986300917-64674bd600d8?w=800&q=80",
-  "https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?w=800&q=80",
-  "https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=800&q=80",
-];
+const LOCAL_IMAGES = {
+  "Restaurantes":   "/images/restaurant.jpg",
+  "Comida":         "/images/food.jpg",
+  "Entretenimiento":"/images/entertainment.jpg",
+  "Belleza":        "/images/beauty.jpg",
+  "Deportes":       "/images/sports.jpg",
+  "Compras":        "/images/shopping.jpg",
+  "Shopping":       "/images/shopping.jpg",
+}
 
-function imagenParaOferta(oferta) {
-  if (oferta.imagenUrl) return oferta.imagenUrl;
-  let h = 0;
-  const id = oferta.id || "";
-  for (let i = 0; i < id.length; i++) h += id.charCodeAt(i);
-  return OFERTA_FALLBACK_IMAGES[h % OFERTA_FALLBACK_IMAGES.length];
+const FALLBACK = [
+  "/images/food.jpg",
+  "/images/restaurant.jpg",
+  "/images/shopping.jpg",
+  "/images/entertainment.jpg",
+  "/images/beauty.jpg",
+]
+
+const RUBRO_ICON = {
+  "Restaurantes":"🍽️","Comida":"🍕","Entretenimiento":"🎬",
+  "Belleza":"💇","Salud":"🏥","Viajes":"✈️",
+  "Tecnología":"💻","Moda":"👗","Deportes":"🏋️","Educación":"📚",
+}
+
+const RUBRO_GRADIENT = {
+  "Restaurantes": "from-orange-500/20 to-red-500/10",
+  "Comida":       "from-yellow-500/20 to-orange-500/10",
+  "Entretenimiento":"from-purple-500/20 to-pink-500/10",
+  "Belleza":      "from-pink-500/20 to-rose-500/10",
+  "Deportes":     "from-blue-500/20 to-cyan-500/10",
+  "Viajes":       "from-cyan-500/20 to-teal-500/10",
+}
+
+function getImagen(oferta) {
+  if (oferta.imagenUrl) return oferta.imagenUrl
+  if (LOCAL_IMAGES[oferta.rubro]) return LOCAL_IMAGES[oferta.rubro]
+  let h = 0
+  for (let i = 0; i < (oferta.id || "").length; i++) h += oferta.id.charCodeAt(i)
+  return FALLBACK[h % FALLBACK.length]
+}
+
+function calcularDescuento(regular, oferta) {
+  if (!regular) return 0
+  return Math.round(((regular - oferta) / regular) * 100)
+}
+
+function formatFecha(fecha) {
+  if (!fecha) return "—"
+  const d = fecha?.toDate ? fecha.toDate() : new Date(fecha)
+  return d.toLocaleDateString("es-SV", { day:"2-digit", month:"short", year:"numeric" })
+}
+
+const IcSearch = () => (
+  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
+  </svg>
+)
+const IcX = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M18 6L6 18M6 6l12 12"/>
+  </svg>
+)
+const IcCalendar = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>
+  </svg>
+)
+const IcUsers = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/>
+    <path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/>
+  </svg>
+)
+const IcArrow = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M5 12h14M12 5l7 7-7 7"/>
+  </svg>
+)
+const IcTag = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z"/>
+    <line x1="7" y1="7" x2="7.01" y2="7"/>
+  </svg>
+)
+
+function TarjetaOferta({ oferta, imagenSrc, descuento, user, onComprar }) {
+  const [hovered, setHovered] = useState(false)
+  const disponibles = oferta.cantidadLimite != null
+    ? oferta.cantidadLimite - (oferta.cuponesVendidos || 0)
+    : null
+  const stockPct = disponibles !== null && oferta.cantidadLimite
+    ? (disponibles / oferta.cantidadLimite) * 100
+    : null
+
+  return (
+    <div
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      className="card flex flex-col overflow-hidden group cursor-pointer"
+    >
+      <div className="relative h-44 overflow-hidden shrink-0">
+        <img
+          src={imagenSrc}
+          alt={oferta.titulo}
+          onError={e => { e.target.src = "/images/food.jpg" }}
+          className={`w-full h-full object-cover transition-transform duration-700 ${hovered ? "scale-110" : "scale-100"}`}
+        />
+        <div className="absolute inset-0"
+             style={{ background: "linear-gradient(to top, rgba(7,9,15,0.95) 0%, rgba(7,9,15,0.3) 50%, transparent 100%)" }} />
+
+        {descuento > 0 && (
+          <div className="absolute top-3 right-3 px-2.5 py-1 rounded-lg text-xs font-black text-white"
+               style={{ background:"linear-gradient(135deg,#7C3AED,#06B6D4)", boxShadow:"0 2px 12px rgba(124,58,237,0.5)" }}>
+            -{descuento}%
+          </div>
+        )}
+
+        {oferta.rubro && (
+          <div className="absolute top-3 left-3 flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-white/70"
+               style={{ background:"rgba(7,9,15,0.75)", backdropFilter:"blur(8px)", border:"1px solid rgba(255,255,255,0.08)" }}>
+            {RUBRO_ICON[oferta.rubro] || "🏷️"} {oferta.rubro}
+          </div>
+        )}
+
+        <div className="absolute bottom-3 left-4">
+          <span className="text-xs font-bold uppercase tracking-widest"
+                style={{ color:"#06B6D4" }}>
+            {oferta.nombreEmpresa || "Empresa"}
+          </span>
+        </div>
+      </div>
+
+      <div className="p-5 flex flex-col gap-3 flex-1">
+        <h3 className="font-heading text-base font-bold text-white leading-snug line-clamp-2">
+          {oferta.titulo}
+        </h3>
+
+        <p className="text-xs text-white/40 line-clamp-2 leading-relaxed">{oferta.descripcion}</p>
+
+        <div className="flex items-baseline gap-2.5">
+          <span className="text-white/30 line-through text-xs">
+            ${Number(oferta.precioRegular).toFixed(2)}
+          </span>
+          <span className="font-heading text-2xl font-bold text-grad">
+            ${Number(oferta.precioOferta).toFixed(2)}
+          </span>
+        </div>
+
+        {stockPct !== null && (
+          <div>
+            <div className="flex justify-between text-xs text-white/35 mb-1.5">
+              <span className="flex items-center gap-1"><IcUsers /> {disponibles} disponibles</span>
+              <span>{Math.round(stockPct)}% restante</span>
+            </div>
+            <div className="h-1 rounded-full overflow-hidden" style={{ background:"rgba(255,255,255,0.06)" }}>
+              <div className="h-full rounded-full transition-all duration-500"
+                   style={{
+                     width: `${stockPct}%`,
+                     background: stockPct > 50 ? "linear-gradient(90deg,#10B981,#059669)"
+                               : stockPct > 20 ? "linear-gradient(90deg,#F59E0B,#D97706)"
+                               :                 "linear-gradient(90deg,#EF4444,#DC2626)",
+                   }} />
+            </div>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-1.5 pt-2 border-t text-xs text-white/30"
+             style={{ borderColor:"rgba(255,255,255,0.06)" }}>
+          <span className="flex items-center gap-1.5">
+            <IcCalendar /> Válido hasta: <span className="text-white/50">{formatFecha(oferta.fechaFin)}</span>
+          </span>
+          {oferta.fechaLimiteCupon && (
+            <span className="flex items-center gap-1.5">
+              <IcTag /> Canjear antes: <span className="text-white/50">{formatFecha(oferta.fechaLimiteCupon)}</span>
+            </span>
+          )}
+        </div>
+
+        {user ? (
+          <button onClick={onComprar} className="btn-primary w-full mt-auto py-2.5 text-sm">
+            Comprar cupón <IcArrow />
+          </button>
+        ) : (
+          <div className="mt-auto flex flex-col gap-2">
+            <p className="text-center text-xs text-white/35 px-3 py-2 rounded-xl"
+               style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.06)" }}>
+              Necesitas cuenta para comprar
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              <Link to="/login"    className="btn-primary text-sm py-2.5 text-center">Entrar</Link>
+              <Link to="/registro" className="btn-ghost text-sm py-2.5 text-center">Registro</Link>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
 }
 
 export default function MostrarOfertas() {
-  const { user } = useAuth();
-  const [ofertasPorRubro, setOfertasPorRubro] = useState({});
-  const [rubroActivo, setRubroActivo] = useState(null);
-  const [ofertaSeleccionada, setOfertaSeleccionada] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { user } = useAuth()
+  const [ofertasPorRubro, setOfertasPorRubro] = useState({})
+  const [rubroActivo,     setRubroActivo]     = useState(null)
+  const [seleccionada,    setSeleccionada]    = useState(null)
+  const [loading,         setLoading]         = useState(true)
+  const [error,           setError]           = useState(null)
+  const [busqueda,        setBusqueda]        = useState("")
 
-  useEffect(() => {
-    cargarOfertas();
-  }, []);
+  useEffect(() => { cargarOfertas() }, [])
 
   async function cargarOfertas() {
     try {
-      setLoading(true);
-      const q = query(collection(db, "ofertas"), where("estado", "==", "aprobada"));
-      const snapshot = await getDocs(q);
-      const agrupadas = {};
-      const hoy = new Date();
-
-      snapshot.forEach((docSnap) => {
-        const oferta = { id: docSnap.id, ...docSnap.data() };
-
-        const inicio = oferta.fechaInicio?.toDate ? oferta.fechaInicio.toDate() : new Date(oferta.fechaInicio);
-        const fin    = oferta.fechaFin?.toDate    ? oferta.fechaFin.toDate()    : new Date(oferta.fechaFin);
-
-        if (inicio > hoy || fin < hoy) return;
-        if (oferta.cantidadLimite != null && (oferta.cuponesVendidos || 0) >= oferta.cantidadLimite) return;
-
-        const rubro = oferta.rubro || "Sin categoría";
-        if (!agrupadas[rubro]) agrupadas[rubro] = [];
-        agrupadas[rubro].push({ ...oferta, fechaInicio: inicio, fechaFin: fin });
-      });
-
-      setOfertasPorRubro(agrupadas);
-      const rubros = Object.keys(agrupadas);
-      if (rubros.length > 0) setRubroActivo(rubros[0]);
-    } catch (err) {
-      console.error(err);
-      setError("No se pudieron cargar las ofertas.");
-    } finally {
-      setLoading(false);
-    }
+      setLoading(true)
+      const q   = query(collection(db,"ofertas"), where("estado","==","aprobada"))
+      const snap = await getDocs(q)
+      const agruped = {}
+      const hoy  = new Date()
+      snap.forEach(docSnap => {
+        const o = { id: docSnap.id, ...docSnap.data() }
+        const ini = o.fechaInicio?.toDate ? o.fechaInicio.toDate() : new Date(o.fechaInicio)
+        const fin = o.fechaFin?.toDate    ? o.fechaFin.toDate()    : new Date(o.fechaFin)
+        if (ini > hoy || fin < hoy) return
+        if (o.cantidadLimite != null && (o.cuponesVendidos||0) >= o.cantidadLimite) return
+        const r = o.rubro || "Otros"
+        if (!agruped[r]) agruped[r] = []
+        agruped[r].push({ ...o, fechaInicio:ini, fechaFin:fin })
+      })
+      setOfertasPorRubro(agruped)
+      const rubros = Object.keys(agruped)
+      if (rubros.length) setRubroActivo(rubros[0])
+    } catch { setError("No se pudieron cargar las ofertas.") }
+    finally  { setLoading(false) }
   }
 
-  function calcularDescuento(regular, oferta) {
-    if (!regular || regular === 0) return 0;
-    return Math.round(((regular - oferta) / regular) * 100);
-  }
+  const rubros = Object.keys(ofertasPorRubro)
+  const total  = rubros.reduce((a,r) => a + ofertasPorRubro[r].length, 0)
 
-  function formatFecha(fecha) {
-    if (!fecha) return "—";
-    const d = fecha?.toDate ? fecha.toDate() : new Date(fecha);
-    return d.toLocaleDateString("es-SV", { day: "2-digit", month: "short", year: "numeric" });
-  }
+  const ofertasFiltradas = useMemo(() => {
+    if (!rubroActivo || !ofertasPorRubro[rubroActivo]) return []
+    const q = busqueda.toLowerCase().trim()
+    if (!q) return ofertasPorRubro[rubroActivo]
+    return ofertasPorRubro[rubroActivo].filter(o =>
+      o.titulo?.toLowerCase().includes(q) ||
+      o.descripcion?.toLowerCase().includes(q) ||
+      o.nombreEmpresa?.toLowerCase().includes(q)
+    )
+  }, [rubroActivo, ofertasPorRubro, busqueda])
 
-  // ── Cargando ──
   if (loading) {
     return (
-      <div className="min-h-screen bg-[#0f1a13] flex items-center justify-center">
-        <p className="text-[#ACCC7B] text-xl font-bold animate-pulse">Cargando ofertas...</p>
+      <div className="page-bg min-h-screen py-10 px-4 sm:px-6 lg:px-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="skeleton h-64 rounded-3xl mb-10" />
+          <div className="flex gap-2 mb-8">{[1,2,3,4].map(i=><div key={i} className="skeleton h-9 w-28 rounded-xl"/>)}</div>
+          <SkeletonGrid count={6} />
+        </div>
       </div>
-    );
+    )
   }
 
-  // ── Error ──
   if (error) {
     return (
-      <div className="min-h-screen bg-[#0f1a13] flex items-center justify-center">
-        <p className="text-red-400 text-lg">{error}</p>
+      <div className="page-bg min-h-screen flex items-center justify-center">
+        <div className="text-center px-6">
+          <div className="text-5xl mb-4">⚠️</div>
+          <p className="text-white/50">{error}</p>
+          <button onClick={cargarOfertas} className="btn-primary mt-6">Reintentar</button>
+        </div>
       </div>
-    );
+    )
   }
 
-  const rubros = Object.keys(ofertasPorRubro);
-  const sinOfertas = rubros.length === 0;
-
   return (
-    <div className="min-h-screen bg-gradient-to-b from-[#0f1a13] via-[#1a2e20] to-[#0f1a13] py-10 px-4 sm:px-6 lg:px-8 text-white font-sans">
+    <div className="page-bg min-h-screen py-10 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
 
-        {/* Hero — visible sin iniciar sesión */}
-        <section className="relative rounded-2xl overflow-hidden mb-10 min-h-[200px] sm:min-h-[240px] flex items-stretch shadow-xl border border-[#668A4C]/30">
-          <img
-            src="https://images.unsplash.com/photo-1556742502-ec7c0e9f34b1?w=1600&q=80"
-            alt=""
-            className="absolute inset-0 w-full h-full object-cover opacity-35"
-          />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#0f1a13] via-[#0f1a13]/90 to-[#0f1a13]/40" />
-          <div className="relative z-10 px-6 sm:px-10 py-8 sm:py-10 max-w-2xl flex flex-col justify-center">
-            <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight text-white mb-2">
-              Ofertas para todos
+        <section className="relative rounded-3xl overflow-hidden mb-12 min-h-[260px] sm:min-h-[300px] flex items-stretch animate-fade-in"
+                 style={{ border:"1px solid rgba(124,58,237,0.2)" }}>
+          <img src="/images/hero-main.jpg" alt=""
+               className="absolute inset-0 w-full h-full object-cover opacity-15" />
+          <div className="absolute inset-0"
+               style={{ background:"linear-gradient(110deg, rgba(7,9,15,0.98) 0%, rgba(7,9,15,0.85) 50%, rgba(124,58,237,0.08) 100%)" }} />
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute top-0 right-0 w-96 h-96 opacity-20 animate-glow-pulse"
+                 style={{ background:"radial-gradient(circle, #7C3AED, transparent 70%)", transform:"translate(20%,-20%)" }} />
+            <div className="absolute bottom-0 right-1/3 w-64 h-64 opacity-15"
+                 style={{ background:"radial-gradient(circle, #06B6D4, transparent 70%)", transform:"translateY(30%)" }} />
+          </div>
+
+          <div className="relative z-10 px-8 sm:px-14 py-12 max-w-2xl flex flex-col justify-center gap-5">
+            <div className="badge badge-purple w-fit text-xs">
+              <span className="glow-dot glow-dot-purple" />
+              {total} ofertas activas
+            </div>
+            <h1 className="font-heading text-4xl sm:text-5xl font-bold text-white leading-tight">
+              Descuentos para<br />
+              <span className="text-grad">cada ocasión</span>
             </h1>
-            <p className="text-gray-300 text-sm sm:text-base leading-relaxed">
-              Explora cupones aprobados y vigentes sin necesidad de iniciar sesión.{" "}
-              <span className="text-[#ACCC7B] font-semibold">
-                Solo te pediremos cuenta al momento de comprar.
-              </span>
+            <p className="text-white/45 text-sm sm:text-base leading-relaxed max-w-md">
+              Explora cupones exclusivos en restaurantes, entretenimiento y servicios.{" "}
+              <span style={{ color:"#22D3EE" }}>Sin registro para ver las ofertas.</span>
             </p>
+            {!user && (
+              <div className="flex flex-col sm:flex-row gap-3 pt-1">
+                <Link to="/registro" className="btn-primary text-sm py-3 px-6">
+                  Crear cuenta gratis <IcArrow />
+                </Link>
+                <Link to="/login" className="btn-ghost text-sm py-3 px-6">Ya tengo cuenta</Link>
+              </div>
+            )}
           </div>
         </section>
 
-        {/* Encabezado */}
-        <div className="text-center mb-10">
-          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-2">
-            Ofertas por rubro
+        <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between mb-6">
+          <h2 className="font-heading text-xl font-bold text-white">
+            {rubroActivo ? `${RUBRO_ICON[rubroActivo]||"🏷️"} ${rubroActivo}` : "Todas las categorías"}
           </h2>
-          <p className="text-gray-300 text-lg">Descuentos clasificados por categoría</p>
+          <div className="relative w-full sm:w-72">
+            <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/25"><IcSearch /></span>
+            <input type="text" placeholder="Buscar oferta o empresa…"
+                   value={busqueda} onChange={e => setBusqueda(e.target.value)}
+                   className="input-field pl-11 pr-10 py-2.5 text-sm" />
+            {busqueda && (
+              <button onClick={() => setBusqueda("")}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-white/25 hover:text-white/55 transition-colors">
+                <IcX />
+              </button>
+            )}
+          </div>
         </div>
 
-        {sinOfertas ? (
-          <div className="max-w-2xl mx-auto rounded-2xl border border-gray-600 bg-[#1a241b]/90 p-8 sm:p-10 text-center">
-            <p className="text-gray-200 text-lg font-semibold mb-3">
-              No hay ofertas disponibles en este momento.
-            </p>
-            <p className="text-gray-400 text-sm leading-relaxed mb-4">
-              Eso puede pasar si en Firestore no hay documentos en{" "}
-              <code className="text-[#ACCC7B]">ofertas</code> con{" "}
-              <code className="text-[#ACCC7B]">{`estado: "aprobada"`}</code>, si las fechas de
-              vigencia ya pasaron o aún no empiezan, o si se agotaron los cupones.
-            </p>
-            <p className="text-gray-500 text-xs">
-              Revisa la consola del navegador (F12) por errores de permisos de Firebase.
-            </p>
+        {rubros.length === 0 ? (
+          <div className="py-20 text-center rounded-3xl"
+               style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.06)" }}>
+            <div className="text-5xl mb-4">🎫</div>
+            <p className="text-white/50 font-medium">Sin ofertas disponibles por ahora</p>
+            <p className="text-white/25 text-sm mt-1">Vuelve pronto para ver nuevos descuentos</p>
           </div>
-        ) : null}
-
-        {!sinOfertas && (
+        ) : (
           <>
-            {/* Tabs de rubros */}
-            <div className="flex flex-wrap justify-center gap-2 mb-10 border-b border-gray-600 pb-4">
-              {rubros.map((rubro) => (
-                <button
-                  key={rubro}
-                  onClick={() => setRubroActivo(rubro)}
-                  className={`flex items-center gap-2 px-5 py-2 rounded-lg font-semibold transition-all duration-200
-                    ${rubroActivo === rubro
-                      ? "bg-[#668A4C] text-white shadow-lg"
-                      : "bg-transparent text-gray-400 hover:text-white hover:bg-white/10"
-                    }`}
-                >
-                  {rubro}
-                  <span className={`text-xs px-2 py-0.5 rounded-full
-                    ${rubroActivo === rubro ? "bg-[#557240] text-white" : "bg-white/10 text-gray-300"}`}>
-                    {ofertasPorRubro[rubro].length}
-                  </span>
+            <div className="flex flex-wrap gap-2 mb-8">
+              {rubros.map(rubro => (
+                <button key={rubro}
+                        onClick={() => { setRubroActivo(rubro); setBusqueda("") }}
+                        className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium
+                                    transition-all duration-200 border ${
+                          rubroActivo === rubro
+                            ? "text-white border-transparent"
+                            : "text-white/45 border-white/8 hover:text-white/75 hover:border-white/15 hover:bg-white/4"
+                        }`}
+                        style={rubroActivo === rubro
+                          ? { background:"linear-gradient(135deg,#7C3AED,#06B6D4)", boxShadow:"0 4px 20px rgba(124,58,237,0.35)" }
+                          : {}}>
+                  {RUBRO_ICON[rubro]||"🏷️"} {rubro}
+                  <span className={`text-xs px-1.5 py-0.5 rounded-md ${
+                    rubroActivo === rubro ? "bg-white/20 text-white" : "bg-white/6 text-white/35"
+                  }`}>{ofertasPorRubro[rubro].length}</span>
                 </button>
               ))}
             </div>
 
-            {/* Grid de tarjetas */}
-            {rubroActivo && (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
-                {ofertasPorRubro[rubroActivo].map((oferta) => (
-                  <TarjetaOferta
-                    key={oferta.id}
-                    oferta={oferta}
-                    imagenSrc={imagenParaOferta(oferta)}
-                    descuento={calcularDescuento(oferta.precioRegular, oferta.precioOferta)}
-                    formatFecha={formatFecha}
-                    user={user}
-                    onComprar={() => setOfertaSeleccionada(oferta)}
-                  />
+            {busqueda && (
+              <p className="text-sm text-white/35 mb-5">
+                {ofertasFiltradas.length} resultado{ofertasFiltradas.length!==1?"s":""} para
+                {" "}<span style={{ color:"#A78BFA" }}>"{busqueda}"</span>
+              </p>
+            )}
+
+            {ofertasFiltradas.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+                {ofertasFiltradas.map((oferta, idx) => (
+                  <div key={oferta.id} className="animate-fade-in-up"
+                       style={{ animationDelay:`${idx * 55}ms` }}>
+                    <TarjetaOferta
+                      oferta={oferta}
+                      imagenSrc={getImagen(oferta)}
+                      descuento={calcularDescuento(oferta.precioRegular, oferta.precioOferta)}
+                      user={user}
+                      onComprar={() => setSeleccionada(oferta)}
+                    />
+                  </div>
                 ))}
+              </div>
+            ) : (
+              <div className="py-20 text-center animate-fade-in">
+                <div className="text-4xl mb-3">🔍</div>
+                <p className="text-white/45">Sin resultados para "{busqueda}"</p>
+                <button onClick={() => setBusqueda("")} className="btn-ghost text-sm mt-4 py-2 px-5">
+                  Limpiar búsqueda
+                </button>
               </div>
             )}
           </>
         )}
       </div>
 
-      {/* Modal de compra — solo si hay sesión */}
-      {ofertaSeleccionada && user && (
-        <CompraForm
-          oferta={ofertaSeleccionada}
-          formatFecha={formatFecha}
-          onClose={() => setOfertaSeleccionada(null)}
-        />
+      {seleccionada && user && (
+        <CompraForm oferta={seleccionada} formatFecha={formatFecha} onClose={() => setSeleccionada(null)} />
       )}
     </div>
-  );
+  )
 }
-
-// ═══════════════════════════════════════════════════════════════
-//  TarjetaOferta
-// ═══════════════════════════════════════════════════════════════
-function TarjetaOferta({ oferta, imagenSrc, descuento, formatFecha, user, onComprar }) {
-  const cuponesDisponibles =
-    oferta.cantidadLimite != null
-      ? oferta.cantidadLimite - (oferta.cuponesVendidos || 0)
-      : null;
-
-  return (
-    <div className="flex flex-col rounded-xl overflow-hidden border border-[#668A4C]/80 bg-[#1e2c22] hover:shadow-xl hover:shadow-[#668A4C]/10 transition-shadow duration-300">
-
-      <div className="relative h-44 bg-[#243028] shrink-0">
-        <img
-          src={imagenSrc}
-          alt=""
-          className="w-full h-full object-cover"
-        />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#1e2c22] via-transparent to-black/20" />
-        {descuento > 0 && (
-          <span className="absolute top-3 right-3 bg-[#668A4C] text-white text-xs font-black px-3 py-1 rounded-full shadow-lg">
-            -{descuento}%
-          </span>
-        )}
-      </div>
-
-      <div className="h-1 bg-gradient-to-r from-[#668A4C] to-[#ACCC7B]" />
-
-      <div className="p-6 flex flex-col gap-3 flex-1">
-
-        <div className="flex items-start justify-between gap-2">
-          <span className="text-xs font-bold uppercase tracking-widest text-[#ACCC7B]">
-            {oferta.nombreEmpresa || "Empresa"}
-          </span>
-        </div>
-
-        <h3 className="text-lg font-bold text-white leading-snug line-clamp-2">
-          {oferta.titulo}
-        </h3>
-
-        <p className="text-sm text-gray-300 line-clamp-3 leading-relaxed">
-          {oferta.descripcion}
-        </p>
-
-        <div className="flex items-baseline gap-3 mt-1">
-          <span className="text-gray-400 line-through text-sm">
-            ${Number(oferta.precioRegular).toFixed(2)}
-          </span>
-          <span className="text-3xl font-extrabold text-[#ACCC7B]">
-            ${Number(oferta.precioOferta).toFixed(2)}
-          </span>
-        </div>
-
-        <div className="border-t border-gray-600 pt-3 flex flex-col gap-1.5 text-xs text-gray-400">
-          <span>📅 Vigente hasta: <strong className="text-gray-200">{formatFecha(oferta.fechaFin)}</strong></span>
-          <span>🎫 Canjear antes de: <strong className="text-gray-200">{formatFecha(oferta.fechaLimiteCupon)}</strong></span>
-          {cuponesDisponibles !== null && (
-            <span>🔢 Cupones restantes: <strong className="text-gray-200">{cuponesDisponibles}</strong></span>
-          )}
-        </div>
-
-        {/* Botón — comportamiento diferente según si hay sesión */}
-        {user ? (
-          <button
-            onClick={onComprar}
-            className="mt-auto w-full bg-[#668A4C] hover:bg-[#557240] text-white font-bold py-3 rounded-lg transition-colors duration-200"
-          >
-            Comprar cupón
-          </button>
-        ) : (
-          <div className="mt-auto flex flex-col gap-2">
-            <div className="text-center text-xs text-gray-400 bg-[#2c3e2e] rounded-lg px-3 py-2 border border-gray-600">
-              Debes iniciar sesión para comprar
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <Link
-                to="/login"
-                className="text-center bg-[#668A4C] hover:bg-[#557240] text-white font-bold py-2.5 rounded-lg transition-colors duration-200 text-sm"
-              >
-                Iniciar sesión
-              </Link>
-              <Link
-                to="/registro"
-                className="text-center bg-transparent border border-[#668A4C] hover:bg-[#668A4C] text-[#ACCC7B] hover:text-white font-bold py-2.5 rounded-lg transition-colors duration-200 text-sm"
-              >
-                Registrarse
-              </Link>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-} 

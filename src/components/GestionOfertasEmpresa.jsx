@@ -731,7 +731,9 @@ export default function GestionOfertasEmpresa() {
             y podrá canjear cupones en la ruta Canjear. Se intenta guardar siempre un{" "}
             <strong className="text-white/90">empresaId</strong> (documento en <code className="text-cyan-300/90">empresas</code>
             ) buscándolo en tu perfil, por nombre de empresa o en tus ofertas; sin eso el canje suele fallar por reglas de
-            seguridad.
+            seguridad. Si editás Firestore a mano: <strong className="text-white/90">empresaId</strong> debe ser el{" "}
+            <strong className="text-white/90">ID del documento</strong> en <code className="text-cyan-300/90">empresas</code>
+            , no el código comercial tipo <code className="text-cyan-300/90">EVS001</code>.
           </p>
           <form onSubmit={guardarEmpleado} className="grid sm:grid-cols-2 gap-4 mb-8">
             <div className="sm:col-span-2">

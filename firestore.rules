@@ -58,6 +58,20 @@ service cloud.firestore {
       );
     }
 
+    /** Transiciones de estado que la empresa puede hacer sola (sin volver a aprobar). */
+    function adminEmpresaTransicionOfertaPermitida() {
+      return request.resource.data.estado == resource.data.estado ||
+        (resource.data.estado == 'rechazada' &&
+          (request.resource.data.estado == 'pendiente' || request.resource.data.estado == 'descartada')) ||
+        (resource.data.estado == 'pendiente' && request.resource.data.estado == 'descartada');
+    }
+
+    function adminEmpresaPuedeActualizarOferta() {
+      return signedIn() && isAdminEmpresa() && ofertaEsDeMiEmpresa() &&
+        !(request.resource.data.estado == 'aprobada' && resource.data.estado != 'aprobada') &&
+        adminEmpresaTransicionOfertaPermitida();
+    }
+
     function empleadoPuedeVerCupon(cupon) {
       return isEmpleado() && (
         (perfilData().empresaId != null && cupon.empresaId == perfilData().empresaId) ||
@@ -96,8 +110,7 @@ service cloud.firestore {
         request.resource.data.estado == 'pendiente';
 
       allow update: if isAdmin() ||
-        (signedIn() && isAdminEmpresa() && ofertaEsDeMiEmpresa() &&
-          !(request.resource.data.estado == 'aprobada' && resource.data.estado != 'aprobada')) ||
+        adminEmpresaPuedeActualizarOferta() ||
         (puedeComprarComoCliente() &&
           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['cuponesVendidos']));
 

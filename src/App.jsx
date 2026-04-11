@@ -21,7 +21,7 @@ const IconTicket = () => (
 )
 
 const NAV_LINKS = [
-  { to: "/comprar",         label: "Explorar",       roles: null },
+  { to: "/comprar",         label: "Explorar",       adminLabel: "Aprobar ofertas", roles: null },
   { to: "/mis-cupones",     label: "Mis Cupones",    roles: ["cliente"] },
   { to: "/admin",           label: "Panel Admin",    roles: ["admin"] },
   { to: "/empresa/ofertas", label: "Mis Ofertas",    roles: ["admin_empresa"] },
@@ -89,7 +89,9 @@ function NavBar() {
 
             <div className="hidden md:flex items-center gap-7">
               {linksVisibles.map(l => (
-                <NavLink key={l.to} to={l.to}>{l.label}</NavLink>
+                <NavLink key={l.to} to={l.to}>
+                  {l.adminLabel && role === "admin" ? l.adminLabel : l.label}
+                </NavLink>
               ))}
             </div>
 
@@ -134,7 +136,7 @@ function NavBar() {
             {linksVisibles.map(l => (
               <Link key={l.to} to={l.to} onClick={() => setMenuAbierto(false)}
                     className="text-sm font-medium text-white/55 hover:text-white py-2 border-b border-white/5 transition-colors">
-                {l.label}
+                {l.adminLabel && role === "admin" ? l.adminLabel : l.label}
               </Link>
             ))}
             <div className="pt-3 flex flex-col gap-2">

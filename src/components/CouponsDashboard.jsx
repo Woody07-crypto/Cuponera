@@ -40,7 +40,7 @@ export default function CouponsDashboard() {
 
   if (loading) {
     return (
-      <div className="page-bg min-h-screen py-12 px-4 sm:px-6 lg:px-8">
+      <div className="page-bg min-h-screen py-10 sm:py-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="skeleton h-10 w-52 rounded-xl mb-3" />
           <div className="skeleton h-5 w-40 rounded mb-10" />
@@ -54,18 +54,22 @@ export default function CouponsDashboard() {
   }
 
   return (
-    <div className="page-bg min-h-screen py-12 px-4 sm:px-6 lg:px-8">
+    <div className="page-bg min-h-screen py-10 sm:py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-7xl mx-auto">
 
-        <div className="mb-10 animate-fade-in-up">
-          <div className="flex items-center gap-3 mb-2">
-            <h1 className="font-heading text-4xl font-bold text-white">Mis Cupones</h1>
+        <header className="mb-8 sm:mb-10 animate-fade-in-up">
+          <div className="flex flex-wrap items-center gap-3 mb-3">
+            <h1 className="text-3xl sm:text-4xl font-heading font-bold text-white tracking-tight">
+              Mis <span className="text-grad">cupones</span>
+            </h1>
             <span className="badge badge-purple text-xs">
               {cupones.length} total{cupones.length!==1?"es":""}
             </span>
           </div>
-          <p className="text-white/35 text-sm">Gestiona tus cupones activos, canjeados y vencidos</p>
-        </div>
+          <p className="text-[var(--muted)] text-sm sm:text-base leading-relaxed max-w-2xl">
+            Gestiona tus cupones activos, canjeados y vencidos. Descarga el comprobante PDF desde cada tarjeta.
+          </p>
+        </header>
 
         <div className="flex flex-wrap gap-3 mb-10 animate-fade-in">
           {TABS.map(tab => {
@@ -103,8 +107,7 @@ export default function CouponsDashboard() {
             ))}
           </div>
         ) : (
-          <div className="py-24 text-center rounded-3xl animate-fade-in"
-               style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.06)" }}>
+          <div className="py-24 px-6 text-center rounded-3xl animate-fade-in glass border border-white/[0.08] shadow-glass">
             <div className="text-5xl mb-5">
               {activeTab==="disponible" ? "🎫" : activeTab==="canjeado" ? "✅" : "⌛"}
             </div>

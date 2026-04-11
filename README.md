@@ -61,14 +61,6 @@ La función escribe documentos en **`mail`** con campos `to` y `message.subject`
 
 Variables típicas (según proveedor): las define la propia extensión en la instalación; no hace falta duplicarlas en un `.env` del front.
 
-## Guion rápido para demo oral (cotejo)
-
-1. **Admin La Cuponera:** iniciar sesión, pestaña Rubros (crear rubro), Empresas (CRUD con código AAA000 y comisión), Roles si aplica, aprobar ofertas en Explorar.
-2. **Admin empresa:** Mis ofertas (rubro desde catálogo, crear oferta pendiente), gestión de empleados (UID de prueba con cuenta en Auth), reenvío/descarte si hay rechazo.
-3. **Cliente:** registro con DUI, comprar cupón (código AAA000+7 dígitos), Mis cupones.
-4. **Empleado:** Canjear con código + DUI del comprador.
-5. **Contraseña:** “¿Olvidaste tu contraseña?” y, con sesión iniciada, Cambiar contraseña desde el menú (cuenta email/contraseña).
-
 ## Plantilla Vite (referencia)
 
 - [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) — React Refresh con Babel

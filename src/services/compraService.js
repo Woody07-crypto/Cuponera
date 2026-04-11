@@ -17,6 +17,7 @@ export const guardarCompra = async (data) => {
     empresaId: data.empresaId ?? null,
     precio: data.precio,
     codigo: data.codigo,
+    clienteDui: data.clienteDui,
     fechaLimiteCupon: data.fechaLimiteCupon ?? null,
     fechaCompra: serverTimestamp(),
     estado: "disponible",

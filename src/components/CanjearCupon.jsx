@@ -25,8 +25,9 @@ const IcCheck = () => (
 );
 
 export default function CanjearCupon() {
-  const { user, profile } = useAuth();
+  const { profile } = useAuth();
   const [codigo, setCodigo] = useState("");
+  const [dui, setDui] = useState("");
   const [loading, setLoading] = useState(false);
   const [resultado, setResultado] = useState(null);
   const [error, setError] = useState(null);
@@ -39,13 +40,10 @@ export default function CanjearCupon() {
     setResultado(null);
     setLoading(true);
     try {
-      const r = await canjearCuponPorCodigo(codigo, {
-        uid: user?.uid,
-        empresaId: profile?.empresaId,
-        nombreEmpresa: profile?.nombreEmpresa,
-      });
+      const r = await canjearCuponPorCodigo(codigo, dui);
       setResultado(r);
       setCodigo("");
+      setDui("");
     } catch (err) {
       setError(err.message || "Error al canjear.");
     } finally {
@@ -67,7 +65,7 @@ export default function CanjearCupon() {
             Ingresa el código que muestra el cliente. Solo se aceptan cupones emitidos para{" "}
             <span className="font-semibold text-cyan-300/95">{nombreEmpresa}</span>
             <span className="text-[var(--faint)]"> — </span>
-            el sistema valida empresa y estado antes de registrar el canje.
+            el sistema valida empresa, DUI del presente y estado antes de registrar el canje.
           </p>
         </header>
 
@@ -109,6 +107,26 @@ export default function CanjearCupon() {
                 />
                 <p id="canje-cupon-hint" className="mt-2 text-xs text-[var(--faint)] leading-relaxed">
                   Sin espacios al inicio o al final; puedes pegar el código tal como lo muestra el cliente.
+                </p>
+              </div>
+
+              <div>
+                <label className="label" htmlFor="canje-dui">
+                  DUI de quien presenta el cupón
+                </label>
+                <input
+                  id="canje-dui"
+                  type="text"
+                  value={dui}
+                  onChange={(e) => setDui(e.target.value)}
+                  className="input-field font-mono text-sm"
+                  placeholder="00000000-0"
+                  maxLength={12}
+                  autoComplete="off"
+                  required
+                />
+                <p className="mt-2 text-xs text-[var(--faint)] leading-relaxed">
+                  Debe coincidir con el DUI del comprador registrado al emitir el cupón.
                 </p>
               </div>
 

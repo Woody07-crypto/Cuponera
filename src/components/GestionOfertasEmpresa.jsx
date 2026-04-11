@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   addDoc,
   collection,
@@ -14,6 +14,12 @@ import {
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { db, storage, auth } from "../firebase/config";
 import { useAuth } from "../context/AuthContext";
+import { fetchRubrosActivos } from "../services/rubrosService";
+import {
+  listarEmpleadosEmpresa,
+  upsertEmpleadoPerfil,
+  quitarEmpleadoPerfil,
+} from "../services/empleadoEmpresaService";
 
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 
@@ -69,6 +75,16 @@ export default function GestionOfertasEmpresa() {
   const [imagenUploading, setImagenUploading] = useState(false);
   const [ofertaAccionId, setOfertaAccionId] = useState(null);
   const fileInputRef = useRef(null);
+  const [rubrosLista, setRubrosLista] = useState([]);
+  const [empleados, setEmpleados] = useState([]);
+  const [empleadosLoading, setEmpleadosLoading] = useState(false);
+  const [empleadoForm, setEmpleadoForm] = useState({
+    uid: "",
+    nombres: "",
+    apellidos: "",
+    correo: "",
+  });
+  const [empleadoGuardando, setEmpleadoGuardando] = useState(false);
 
   const cargar = async () => {
     if (!empresaId && !nombreEmpresa) {
@@ -101,6 +117,83 @@ export default function GestionOfertasEmpresa() {
   useEffect(() => {
     cargar();
   }, [empresaId, nombreEmpresa]);
+
+  useEffect(() => {
+    let cancel = false;
+    fetchRubrosActivos(db)
+      .then((rows) => {
+        if (!cancel) setRubrosLista(rows);
+      })
+      .catch(() => {
+        if (!cancel) setRubrosLista([]);
+      });
+    return () => {
+      cancel = true;
+    };
+  }, []);
+
+  const cargarEmpleados = useCallback(async () => {
+    if (!empresaId && !nombreEmpresa) {
+      setEmpleados([]);
+      return;
+    }
+    setEmpleadosLoading(true);
+    try {
+      const rows = await listarEmpleadosEmpresa(db, { empresaId, nombreEmpresa });
+      setEmpleados(rows);
+    } catch (e) {
+      console.error(e);
+      setMensaje({ tipo: "error", text: "No se pudo cargar la lista de empleados." });
+    } finally {
+      setEmpleadosLoading(false);
+    }
+  }, [empresaId, nombreEmpresa]);
+
+  useEffect(() => {
+    cargarEmpleados();
+  }, [cargarEmpleados]);
+
+  const guardarEmpleado = async (e) => {
+    e.preventDefault();
+    if (!empresaId && !nombreEmpresa) return;
+    setEmpleadoGuardando(true);
+    setMensaje(null);
+    try {
+      await upsertEmpleadoPerfil(db, empleadoForm.uid, {
+        nombres: empleadoForm.nombres,
+        apellidos: empleadoForm.apellidos,
+        correo: empleadoForm.correo,
+        empresaId: empresaId || null,
+        nombreEmpresa: (nombreEmpresa || "").trim(),
+      });
+      setEmpleadoForm({ uid: "", nombres: "", apellidos: "", correo: "" });
+      setMensaje({
+        tipo: "ok",
+        text: "Empleado registrado. El usuario debe existir en Authentication con el mismo UID.",
+      });
+      await cargarEmpleados();
+    } catch (err) {
+      console.error(err);
+      setMensaje({
+        tipo: "error",
+        text: err.message || "No se pudo guardar el empleado. Revisa UID y permisos.",
+      });
+    } finally {
+      setEmpleadoGuardando(false);
+    }
+  };
+
+  const eliminarEmpleado = async (uid) => {
+    if (!confirm("¿Quitar acceso de canje a este empleado?")) return;
+    try {
+      await quitarEmpleadoPerfil(db, uid);
+      setMensaje({ tipo: "ok", text: "Empleado eliminado del panel de canje." });
+      await cargarEmpleados();
+    } catch (err) {
+      console.error(err);
+      setMensaje({ tipo: "error", text: "No se pudo eliminar el empleado." });
+    }
+  };
 
   const handleImagenFile = async (e) => {
     const file = e.target.files?.[0];
@@ -446,13 +539,38 @@ export default function GestionOfertasEmpresa() {
                 <label className="label" htmlFor="oferta-rubro">
                   Rubro
                 </label>
-                <input
-                  id="oferta-rubro"
-                  className="input-field"
-                  value={form.rubro}
-                  onChange={(e) => setForm({ ...form, rubro: e.target.value })}
-                  required
-                />
+                {rubrosLista.length > 0 ? (
+                  <select
+                    id="oferta-rubro"
+                    className="input-field"
+                    value={form.rubro}
+                    onChange={(e) => setForm({ ...form, rubro: e.target.value })}
+                    required
+                  >
+                    <option value="" disabled>
+                      Seleccioná un rubro
+                    </option>
+                    {rubrosLista.map((r) => (
+                      <option key={r.id} value={r.nombre || r.id}>
+                        {r.nombre || r.id}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    id="oferta-rubro"
+                    className="input-field"
+                    value={form.rubro}
+                    onChange={(e) => setForm({ ...form, rubro: e.target.value })}
+                    placeholder="Pedí al admin que cargue rubros, o escribí uno"
+                    required
+                  />
+                )}
+                {rubrosLista.length === 0 ? (
+                  <p className="mt-1.5 text-xs text-[var(--faint)]">
+                    Si el catálogo está vacío, el administrador puede crear rubros en el panel admin.
+                  </p>
+                ) : null}
               </div>
               <div>
                 <label className="label" htmlFor="oferta-limite">
@@ -558,6 +676,104 @@ export default function GestionOfertasEmpresa() {
             </div>
           </div>
         </form>
+
+        <section className="relative glass rounded-3xl border border-white/[0.08] shadow-glass overflow-hidden mb-12 p-6 sm:p-8">
+          <div className="h-1 w-full bg-gradient-brand rounded-full mb-6" aria-hidden />
+          <h2 className="text-lg sm:text-xl font-heading font-bold text-white mb-2">
+            Empleados de canje
+          </h2>
+          <p className="text-xs sm:text-sm text-[var(--muted)] mb-6 leading-relaxed">
+            Registrá el <strong className="text-white/90">UID</strong> de Firebase Authentication del
+            colaborador (debe existir la cuenta). Recibirá rol <code className="text-cyan-300/90">empleado</code>{" "}
+            y podrá canjear cupones en la ruta Canjear.
+          </p>
+          <form onSubmit={guardarEmpleado} className="grid sm:grid-cols-2 gap-4 mb-8">
+            <div className="sm:col-span-2">
+              <label className="label" htmlFor="emp-uid">
+                UID (Firebase Auth)
+              </label>
+              <input
+                id="emp-uid"
+                className="input-field font-mono text-sm"
+                value={empleadoForm.uid}
+                onChange={(e) => setEmpleadoForm((f) => ({ ...f, uid: e.target.value.trim() }))}
+                placeholder="Ej. AbCdEf1234567890..."
+                required
+              />
+            </div>
+            <div>
+              <label className="label" htmlFor="emp-nom">
+                Nombres
+              </label>
+              <input
+                id="emp-nom"
+                className="input-field"
+                value={empleadoForm.nombres}
+                onChange={(e) => setEmpleadoForm((f) => ({ ...f, nombres: e.target.value }))}
+              />
+            </div>
+            <div>
+              <label className="label" htmlFor="emp-ape">
+                Apellidos
+              </label>
+              <input
+                id="emp-ape"
+                className="input-field"
+                value={empleadoForm.apellidos}
+                onChange={(e) => setEmpleadoForm((f) => ({ ...f, apellidos: e.target.value }))}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <label className="label" htmlFor="emp-mail">
+                Correo (referencia)
+              </label>
+              <input
+                id="emp-mail"
+                type="email"
+                className="input-field"
+                value={empleadoForm.correo}
+                onChange={(e) => setEmpleadoForm((f) => ({ ...f, correo: e.target.value }))}
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <button type="submit" disabled={empleadoGuardando} className="btn-primary">
+                {empleadoGuardando ? "Guardando…" : "Guardar empleado"}
+              </button>
+            </div>
+          </form>
+          <h3 className="text-sm font-semibold text-white/90 mb-3">Listado</h3>
+          {empleadosLoading ? (
+            <p className="text-sm text-[var(--muted)]">Cargando empleados…</p>
+          ) : empleados.length === 0 ? (
+            <p className="text-sm text-[var(--muted)]">No hay empleados registrados para tu empresa.</p>
+          ) : (
+            <ul className="space-y-2">
+              {empleados.map((emp) => (
+                <li
+                  key={emp.id}
+                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 rounded-xl border border-white/[0.08] bg-white/[0.03] px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-white truncate">
+                      {(emp.nombres || "") + " " + (emp.apellidos || "")}
+                    </p>
+                    <p className="text-xs font-mono text-cyan-200/80 truncate">{emp.id}</p>
+                    {emp.correo ? (
+                      <p className="text-xs text-[var(--faint)] truncate">{emp.correo}</p>
+                    ) : null}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => eliminarEmpleado(emp.id)}
+                    className="text-xs px-3 py-2 rounded-lg border border-red-500/35 text-red-200 hover:bg-red-500/10 shrink-0"
+                  >
+                    Quitar
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
 
         <h2 className="text-xl font-heading font-bold text-white mb-4">Tus ofertas</h2>
         {ofertas.length === 0 ? (

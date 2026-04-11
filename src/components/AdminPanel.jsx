@@ -6,6 +6,11 @@ import {
   guardarRolPerfil,
   ROLES_ORDENADOS,
 } from "../services/perfilService";
+import { fetchRubrosActivos } from "../services/rubrosService";
+import AdminRubrosTab from "./admin/AdminRubrosTab";
+import AdminEmpresasTab from "./admin/AdminEmpresasTab";
+import AdminVistaOperativaModal from "./admin/AdminVistaOperativaModal";
+import AdminClienteCuponesModal from "./admin/AdminClienteCuponesModal";
 
 const IcX = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -34,6 +39,12 @@ const IcUsers = () => (
 const IcShield = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
     <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+  </svg>
+);
+const IcTag = () => (
+  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M20.59 13.41l-7.17 7.17a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" />
+    <line x1="7" y1="7" x2="7.01" y2="7" />
   </svg>
 );
 
@@ -114,6 +125,7 @@ const roleLabels = {
 const TABS = [
   { id: "empresas", label: "Empresas", icon: IcBuilding },
   { id: "clientes", label: "Clientes", icon: IcUsers },
+  { id: "rubros", label: "Rubros", icon: IcTag },
   { id: "roles", label: "Roles", icon: IcShield },
 ];
 
@@ -133,19 +145,28 @@ export default function AdminPanel() {
   const [nuevoCorreo, setNuevoCorreo] = useState("");
   const [savingUid, setSavingUid] = useState(null);
   const [creandoPerfil, setCreandoPerfil] = useState(false);
+  const [rubrosActivos, setRubrosActivos] = useState([]);
+  const [vistaEmpresa, setVistaEmpresa] = useState(null);
+  const [clienteCupones, setClienteCupones] = useState(null);
+
+  const recargarEmpresasYClientes = async () => {
+    const [eSnap, cSnap, rList] = await Promise.all([
+      getDocs(collection(db, "empresas")),
+      getDocs(collection(db, "clientes")),
+      fetchRubrosActivos(db).catch(() => []),
+    ]);
+    setEmpresas(eSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    setClientes(cSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    setRubrosActivos(rList);
+  };
 
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
         setLoading(true);
-        const [eSnap, cSnap] = await Promise.all([
-          getDocs(collection(db, "empresas")),
-          getDocs(collection(db, "clientes")),
-        ]);
+        await recargarEmpresasYClientes();
         if (!alive) return;
-        setEmpresas(eSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
-        setClientes(cSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
       } catch (err) {
         console.error(err);
         if (alive) setError("No se pudieron cargar los datos.");
@@ -183,6 +204,13 @@ export default function AdminPanel() {
     return () => {
       alive = false;
     };
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab !== "empresas" && tab !== "rubros") return;
+    fetchRubrosActivos(db)
+      .then(setRubrosActivos)
+      .catch(() => setRubrosActivos([]));
   }, [tab]);
 
   const handleGuardarRol = async (uid) => {
@@ -249,13 +277,15 @@ export default function AdminPanel() {
     );
   }
 
-  const lista = tab === "empresas" ? empresas : clientes;
+  const lista = tab === "empresas" ? empresas : tab === "clientes" ? clientes : [];
   const tituloPrincipal =
     tab === "empresas"
       ? "Empresas registradas"
       : tab === "clientes"
         ? "Clientes registrados"
-        : "Perfiles y roles";
+        : tab === "rubros"
+          ? "Rubros del sistema"
+          : "Perfiles y roles";
 
   return (
     <div className="page-bg min-h-screen py-8 sm:py-10 px-4 sm:px-6">
@@ -307,14 +337,22 @@ export default function AdminPanel() {
             <h2 id="admin-section-title" className="text-xl sm:text-2xl font-heading font-bold text-white">
               {tituloPrincipal}
             </h2>
-            {tab !== "roles" && lista.length > 0 && (
+            {(tab === "empresas" || tab === "clientes") && lista.length > 0 && (
               <span className="text-xs text-[var(--faint)] font-medium">
                 {lista.length} registro{lista.length !== 1 ? "s" : ""}
               </span>
             )}
           </div>
 
-          {tab === "roles" ? (
+          {tab === "rubros" ? (
+            <AdminRubrosTab
+              onRubrosChanged={() =>
+                fetchRubrosActivos(db)
+                  .then(setRubrosActivos)
+                  .catch(() => {})
+              }
+            />
+          ) : tab === "roles" ? (
             <div className="space-y-8">
               {rolesError && (
                 <div
@@ -481,106 +519,77 @@ export default function AdminPanel() {
                 </div>
               )}
             </div>
+          ) : tab === "empresas" ? (
+            <AdminEmpresasTab
+              empresas={empresas}
+              rubrosActivos={rubrosActivos}
+              onRecargar={recargarEmpresasYClientes}
+              onVerDetalle={(row) => setDetalle({ tipo: "Empresa", row })}
+              onVistaOperativa={(row) => setVistaEmpresa(row)}
+            />
           ) : lista.length === 0 ? (
             <div className="glass rounded-3xl border border-white/[0.08] p-10 sm:p-14 text-center">
               <p className="text-sm text-[var(--muted)] max-w-lg mx-auto leading-relaxed">
                 No hay registros en la colección{" "}
-                <span className="text-cyan-300/90 font-medium">{tab}</span>. Tu equipo puede cargar
-                datos en Firestore (colecciones <code className="font-mono text-xs text-white/70">empresas</code> y{" "}
-                <code className="font-mono text-xs text-white/70">clientes</code>).
+                <span className="text-cyan-300/90 font-medium">{tab}</span>. Los clientes se crean al
+                registrarse en la app.
               </p>
             </div>
           ) : (
             <div className="glass rounded-3xl border border-white/[0.08] shadow-glass overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm min-w-[480px]">
+                <table className="w-full text-left text-sm min-w-[520px]">
                   <thead>
                     <tr className="border-b border-white/[0.08] bg-white/[0.04]">
-                      {tab === "empresas" ? (
-                        <>
-                          <th className="px-4 sm:px-5 py-3.5 font-semibold text-[var(--faint)] text-xs uppercase tracking-wider">
-                            Nombre
-                          </th>
-                          <th className="px-4 sm:px-5 py-3.5 font-semibold text-[var(--faint)] text-xs uppercase tracking-wider hidden sm:table-cell">
-                            Contacto
-                          </th>
-                          <th className="px-4 sm:px-5 py-3.5 font-semibold text-[var(--faint)] text-xs uppercase tracking-wider hidden md:table-cell">
-                            Rubro
-                          </th>
-                        </>
-                      ) : (
-                        <>
-                          <th className="px-4 sm:px-5 py-3.5 font-semibold text-[var(--faint)] text-xs uppercase tracking-wider">
-                            Nombre
-                          </th>
-                          <th className="px-4 sm:px-5 py-3.5 font-semibold text-[var(--faint)] text-xs uppercase tracking-wider hidden sm:table-cell">
-                            Correo
-                          </th>
-                          <th className="px-4 sm:px-5 py-3.5 font-semibold text-[var(--faint)] text-xs uppercase tracking-wider hidden md:table-cell">
-                            Teléfono
-                          </th>
-                        </>
-                      )}
+                      <th className="px-4 sm:px-5 py-3.5 font-semibold text-[var(--faint)] text-xs uppercase tracking-wider">
+                        Nombre
+                      </th>
+                      <th className="px-4 sm:px-5 py-3.5 font-semibold text-[var(--faint)] text-xs uppercase tracking-wider hidden sm:table-cell">
+                        Correo
+                      </th>
+                      <th className="px-4 sm:px-5 py-3.5 font-semibold text-[var(--faint)] text-xs uppercase tracking-wider hidden md:table-cell">
+                        Teléfono
+                      </th>
+                      <th className="px-4 sm:px-5 py-3.5 font-semibold text-[var(--faint)] text-xs uppercase tracking-wider w-44">
+                        Acciones
+                      </th>
                     </tr>
                   </thead>
                   <tbody>
-                    {tab === "empresas"
-                      ? empresas.map((row) => (
-                          <tr
-                            key={row.id}
-                            className="border-b border-white/[0.05] last:border-0 hover:bg-white/[0.04] cursor-pointer transition-colors group"
-                            onClick={() => setDetalle({ tipo: "Empresa", row })}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault();
-                                setDetalle({ tipo: "Empresa", row });
-                              }
-                            }}
-                            tabIndex={0}
-                            role="button"
-                            aria-label={`Ver detalle de ${row.nombre || row.nombreComercial || row.id}`}
-                          >
-                            <td className="px-4 sm:px-5 py-3.5 font-semibold text-white group-hover:text-cyan-200/95 transition-colors">
-                              {row.nombre || row.nombreComercial || row.id}
-                            </td>
-                            <td className="px-4 sm:px-5 py-3.5 text-white/75 hidden sm:table-cell">
-                              {row.email || row.correo || row.emailContacto || "—"}
-                            </td>
-                            <td className="px-4 sm:px-5 py-3.5 text-white/70 hidden md:table-cell">
-                              <span className="badge badge-cyan font-normal normal-case tracking-normal">
-                                {row.rubro || "—"}
-                              </span>
-                            </td>
-                          </tr>
-                        ))
-                      : clientes.map((row) => (
-                          <tr
-                            key={row.id}
-                            className="border-b border-white/[0.05] last:border-0 hover:bg-white/[0.04] cursor-pointer transition-colors group"
-                            onClick={() => setDetalle({ tipo: "Cliente", row })}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" || e.key === " ") {
-                                e.preventDefault();
-                                setDetalle({ tipo: "Cliente", row });
-                              }
-                            }}
-                            tabIndex={0}
-                            role="button"
-                            aria-label={`Ver detalle de ${
-                              [row.nombres, row.apellidos].filter(Boolean).join(" ") || row.id
-                            }`}
-                          >
-                            <td className="px-4 sm:px-5 py-3.5 font-semibold text-white group-hover:text-cyan-200/95 transition-colors">
-                              {[row.nombres, row.apellidos].filter(Boolean).join(" ") || row.id}
-                            </td>
-                            <td className="px-4 sm:px-5 py-3.5 text-white/75 hidden sm:table-cell">
-                              {row.correo || "—"}
-                            </td>
-                            <td className="px-4 sm:px-5 py-3.5 text-white/75 font-mono text-xs hidden md:table-cell tabular-nums">
-                              {row.telefono || "—"}
-                            </td>
-                          </tr>
-                        ))}
+                    {clientes.map((row) => (
+                      <tr
+                        key={row.id}
+                        className="border-b border-white/[0.05] last:border-0 hover:bg-white/[0.04] transition-colors group"
+                      >
+                        <td className="px-4 sm:px-5 py-3.5 font-semibold text-white">
+                          {[row.nombres, row.apellidos].filter(Boolean).join(" ") || row.id}
+                        </td>
+                        <td className="px-4 sm:px-5 py-3.5 text-white/75 hidden sm:table-cell">
+                          {row.correo || "—"}
+                        </td>
+                        <td className="px-4 sm:px-5 py-3.5 text-white/75 font-mono text-xs hidden md:table-cell tabular-nums">
+                          {row.telefono || "—"}
+                        </td>
+                        <td className="px-4 sm:px-5 py-3.5">
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              className="text-xs px-3 py-1.5 rounded-lg border border-brand-purple/35 text-cyan-200/95 hover:bg-white/6"
+                              onClick={() => setClienteCupones(row)}
+                            >
+                              Cupones
+                            </button>
+                            <button
+                              type="button"
+                              className="text-xs px-3 py-1.5 rounded-lg border border-white/15 bg-white/6"
+                              onClick={() => setDetalle({ tipo: "Cliente", row })}
+                            >
+                              Ficha
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
@@ -589,9 +598,8 @@ export default function AdminPanel() {
                   <IcInfo />
                 </span>
                 <p className="text-xs sm:text-sm text-[var(--muted)] leading-relaxed">
-                  <span className="font-semibold text-white/90">Tip:</span> haz clic en una fila (o
-                  usa Enter / espacio cuando esté enfocada) para ver todos los campos guardados en
-                  Firestore.
+                  <span className="font-semibold text-white/90">Tip:</span> «Cupones» agrupa por
+                  disponibles / canjeados / vencidos. «Ficha» muestra todos los campos en Firestore.
                 </p>
               </div>
             </div>
@@ -610,6 +618,12 @@ export default function AdminPanel() {
           data={detalle.row}
           onClose={() => setDetalle(null)}
         />
+      )}
+      {vistaEmpresa && (
+        <AdminVistaOperativaModal empresa={vistaEmpresa} onClose={() => setVistaEmpresa(null)} />
+      )}
+      {clienteCupones && (
+        <AdminClienteCuponesModal cliente={clienteCupones} onClose={() => setClienteCupones(null)} />
       )}
     </div>
   );

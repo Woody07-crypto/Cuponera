@@ -21,7 +21,11 @@ import {
   upsertEmpleadoPerfil,
   quitarEmpleadoPerfil,
 } from "../services/empleadoEmpresaService";
-import { leerCodigoEmpresaDeData } from "../services/empresaService";
+import {
+  buscarEmpresaIdPorNombre,
+  empresaIdAString,
+  leerCodigoEmpresaDeData,
+} from "../services/empresaService";
 
 const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
 
@@ -155,23 +159,41 @@ export default function GestionOfertasEmpresa() {
     cargarEmpleados();
   }, [cargarEmpleados]);
 
+  const resolverEmpresaIdParaEmpleado = async () => {
+    const fromPerfil = empresaIdAString(profile?.empresaId);
+    if (fromPerfil) return fromPerfil;
+    const nom = (nombreEmpresa || "").trim();
+    if (nom) {
+      const byName = await buscarEmpresaIdPorNombre(db, nom);
+      if (byName) return byName;
+    }
+    for (const o of ofertas) {
+      const oid = empresaIdAString(o.empresaId);
+      if (oid) return oid;
+    }
+    return null;
+  };
+
   const guardarEmpleado = async (e) => {
     e.preventDefault();
     if (!empresaId && !nombreEmpresa) return;
     setEmpleadoGuardando(true);
     setMensaje(null);
     try {
+      const empresaIdVinculo = await resolverEmpresaIdParaEmpleado();
       await upsertEmpleadoPerfil(db, empleadoForm.uid, {
         nombres: empleadoForm.nombres,
         apellidos: empleadoForm.apellidos,
         correo: empleadoForm.correo,
-        empresaId: empresaId || null,
-        nombreEmpresa: (nombreEmpresa || "").trim(),
+        empresaId: empresaIdVinculo,
+        nombreEmpresa: (nombreEmpresa || "").trim() || null,
       });
       setEmpleadoForm({ uid: "", nombres: "", apellidos: "", correo: "" });
       setMensaje({
         tipo: "ok",
-        text: "Empleado registrado. El usuario debe existir en Authentication con el mismo UID.",
+        text: empresaIdVinculo
+          ? `Empleado registrado con empresaId «${empresaIdVinculo}» (necesario para canjear). El UID debe coincidir con Firebase Authentication.`
+          : "Empleado registrado solo con nombre de empresa (sin empresaId en Firestore). Si el canje falla, asigná empresaId al admin de empresa o vinculá una oferta con empresaId.",
       });
       await cargarEmpleados();
     } catch (err) {
@@ -706,7 +728,10 @@ export default function GestionOfertasEmpresa() {
           <p className="text-xs sm:text-sm text-[var(--muted)] mb-6 leading-relaxed">
             Registrá el <strong className="text-white/90">UID</strong> de Firebase Authentication del
             colaborador (debe existir la cuenta). Recibirá rol <code className="text-cyan-300/90">empleado</code>{" "}
-            y podrá canjear cupones en la ruta Canjear.
+            y podrá canjear cupones en la ruta Canjear. Se intenta guardar siempre un{" "}
+            <strong className="text-white/90">empresaId</strong> (documento en <code className="text-cyan-300/90">empresas</code>
+            ) buscándolo en tu perfil, por nombre de empresa o en tus ofertas; sin eso el canje suele fallar por reglas de
+            seguridad.
           </p>
           <form onSubmit={guardarEmpleado} className="grid sm:grid-cols-2 gap-4 mb-8">
             <div className="sm:col-span-2">
@@ -782,6 +807,13 @@ export default function GestionOfertasEmpresa() {
                     {emp.correo ? (
                       <p className="text-xs text-[var(--faint)] truncate">{emp.correo}</p>
                     ) : null}
+                    {emp.empresaId ? (
+                      <p className="text-xs font-mono text-emerald-200/80 truncate" title="empresaId en Firestore">
+                        empresaId: {emp.empresaId}
+                      </p>
+                    ) : (
+                      <p className="text-xs text-amber-200/80">Sin empresaId — el canje puede fallar</p>
+                    )}
                   </div>
                   <button
                     type="button"

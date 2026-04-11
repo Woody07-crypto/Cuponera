@@ -1,5 +1,6 @@
 import { collection, getDocs, query, where } from "firebase/firestore";
 import { doc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore";
+import { empresaIdAString } from "./empresaService";
 import { ROLES } from "./perfilService";
 
 /**
@@ -7,12 +8,13 @@ import { ROLES } from "./perfilService";
  */
 export async function listarEmpleadosEmpresa(db, { empresaId, nombreEmpresa }) {
   const out = [];
-  if (empresaId) {
-    const q = query(collection(db, "perfiles"), where("role", "==", ROLES.EMPLEADO), where("empresaId", "==", empresaId));
+  const eidStr = empresaId ? empresaIdAString(empresaId) : null;
+  if (eidStr) {
+    const q = query(collection(db, "perfiles"), where("role", "==", ROLES.EMPLEADO), where("empresaId", "==", eidStr));
     const snap = await getDocs(q);
     snap.forEach((d) => out.push({ id: d.id, ...d.data() }));
   }
-  if (nombreEmpresa && (!empresaId || out.length === 0)) {
+  if (nombreEmpresa && (!eidStr || out.length === 0)) {
     const q2 = query(
       collection(db, "perfiles"),
       where("role", "==", ROLES.EMPLEADO),

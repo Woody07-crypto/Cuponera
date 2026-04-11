@@ -121,7 +121,11 @@ service cloud.firestore {
 
     function empleadoMismaEmpresaQuePerfil(data) {
       return (perfilData().empresaId != null && data.empresaId == perfilData().empresaId) ||
-        (perfilData().nombreEmpresa != null && data.nombreEmpresa == perfilData().nombreEmpresa);
+        (
+          perfilData().nombreEmpresa is string &&
+          data.nombreEmpresa is string &&
+          perfilData().nombreEmpresa.lower() == data.nombreEmpresa.lower()
+        );
     }
 
     /** Cupón aún válido por fecha límite de canje (si existe). */

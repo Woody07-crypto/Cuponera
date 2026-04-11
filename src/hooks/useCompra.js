@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useGenerarCodigo } from "./useGenerarCodigo";
-import { guardarCompra } from "../services/compraService";
+import { guardarCompra, incrementarCuponesVendidos } from "../services/compraService";
 import { useAuth } from "../context/AuthContext";
 
 export function useCompra() {
@@ -29,18 +29,21 @@ export function useCompra() {
       for (let i = 0; i < cantidad; i++) {
         const codigo = generarCodigo(oferta.nombreEmpresa);
 
-        // Guardar cada cupón en Firebase
         await guardarCompra({
           uid: user.uid,
           ofertaId: oferta.id,
           titulo: oferta.titulo,
           nombreEmpresa: oferta.nombreEmpresa,
+          empresaId: oferta.empresaId ?? null,
           precio: oferta.precioOferta,
-          codigo: codigo
+          codigo,
+          fechaLimiteCupon: oferta.fechaLimiteCupon ?? null,
         });
 
         nuevosCodigos.push(codigo);
       }
+
+      await incrementarCuponesVendidos(oferta.id, cantidad);
 
       setCodigosGenerados(nuevosCodigos);
       setExitoso(true);

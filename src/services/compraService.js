@@ -1,18 +1,32 @@
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import {
+  addDoc,
+  collection,
+  doc,
+  increment,
+  serverTimestamp,
+  updateDoc,
+} from "firebase/firestore";
 import { db } from "../firebase/config";
 
-// Guarda el cupón comprado en Firestore
 export const guardarCompra = async (data) => {
-  try {
-    const docRef = await addDoc(collection(db, "misCupones"), {
-      ...data,
-      fechaCompra: serverTimestamp(),
-      estado: "activo"
-    });
+  const docRef = await addDoc(collection(db, "cupones"), {
+    clienteUid: data.uid,
+    ofertaId: data.ofertaId,
+    titulo: data.titulo,
+    nombreEmpresa: data.nombreEmpresa,
+    empresaId: data.empresaId ?? null,
+    precio: data.precio,
+    codigo: data.codigo,
+    fechaLimiteCupon: data.fechaLimiteCupon ?? null,
+    fechaCompra: serverTimestamp(),
+    estado: "disponible",
+  });
+  return docRef.id;
+};
 
-    return docRef.id;
-  } catch (error) {
-    console.error("Error guardando compra:", error);
-    throw error;
-  }
+export const incrementarCuponesVendidos = async (ofertaId, cantidad) => {
+  if (!ofertaId || cantidad < 1) return;
+  await updateDoc(doc(db, "ofertas", ofertaId), {
+    cuponesVendidos: increment(cantidad),
+  });
 };

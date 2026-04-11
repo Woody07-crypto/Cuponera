@@ -7,7 +7,9 @@ export default function CouponsDashboard() {
   const [activeTab, setActiveTab] = useState('disponible');
 
   
-  const filteredCoupons = cupones.filter(cupon => cupon.estado === activeTab);
+  const filteredCoupons = cupones.filter(
+    (cupon) => cupon.estadoMostrar === activeTab
+  );
 
   if (loading) {
     return (

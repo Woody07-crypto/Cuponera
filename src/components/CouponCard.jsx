@@ -3,7 +3,8 @@ import html2canvas from 'html2canvas';
 import { jsPDF } from 'jspdf';
 
 export default function CouponCard({ cupon }) {
-  const isDisponible = cupon.estado === 'disponible';
+  const estado = cupon.estadoMostrar ?? cupon.estado;
+  const isDisponible = estado === "disponible";
   const printRef = useRef();
 
   const handleDownloadPDF = async () => {
@@ -31,11 +32,11 @@ export default function CouponCard({ cupon }) {
             {cupon.titulo || "Sin título"}
           </h3>
           <span className={`text-xs px-2 py-1 rounded-full uppercase tracking-wider font-bold ${
-            isDisponible         ? 'bg-green-500 text-white'  :
-            cupon.estado === 'canjeado' ? 'bg-blue-500 text-white'  :
-                                         'bg-red-500 text-white'
+            isDisponible ? "bg-green-500 text-white" :
+            estado === "canjeado" ? "bg-blue-500 text-white" :
+                                         "bg-red-500 text-white"
           }`}>
-            {cupon.estado}
+            {estado}
           </span>
         </div>
 

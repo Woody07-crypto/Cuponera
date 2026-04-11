@@ -3,6 +3,7 @@ import {
   addDoc,
   collection,
   deleteDoc,
+  deleteField,
   doc,
   getDocs,
   query,
@@ -66,6 +67,7 @@ export default function GestionOfertasEmpresa() {
   const [editId, setEditId] = useState(null);
   const [mensaje, setMensaje] = useState(null);
   const [imagenUploading, setImagenUploading] = useState(false);
+  const [ofertaAccionId, setOfertaAccionId] = useState(null);
   const fileInputRef = useRef(null);
 
   const cargar = async () => {
@@ -205,7 +207,69 @@ export default function GestionOfertasEmpresa() {
     }
   };
 
+  const reenviarRevision = async (id) => {
+    if (
+      !confirm(
+        "¿Enviar de nuevo esta oferta al administrador? Pasará a estado «pendiente» y se limpiará el motivo de rechazo anterior."
+      )
+    )
+      return;
+    setOfertaAccionId(id);
+    setMensaje(null);
+    try {
+      await updateDoc(doc(db, "ofertas", id), {
+        estado: "pendiente",
+        justificacionRechazo: deleteField(),
+      });
+      setMensaje({ tipo: "ok", text: "Oferta enviada de nuevo a revisión." });
+      if (editId === id) {
+        setEditId(null);
+        setForm(emptyForm);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+      await cargar();
+    } catch (e) {
+      console.error(e);
+      setMensaje({ tipo: "error", text: "No se pudo reenviar la oferta. Revisa permisos o conexión." });
+    } finally {
+      setOfertaAccionId(null);
+    }
+  };
+
+  const marcarDescartada = async (id) => {
+    if (
+      !confirm(
+        "¿Marcar esta oferta como descartada? No se publicará en la tienda y quedará archivada para tu empresa."
+      )
+    )
+      return;
+    setOfertaAccionId(id);
+    setMensaje(null);
+    try {
+      await updateDoc(doc(db, "ofertas", id), { estado: "descartada" });
+      setMensaje({ tipo: "ok", text: "Oferta marcada como descartada." });
+      if (editId === id) {
+        setEditId(null);
+        setForm(emptyForm);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+      }
+      await cargar();
+    } catch (e) {
+      console.error(e);
+      setMensaje({ tipo: "error", text: "No se pudo actualizar el estado." });
+    } finally {
+      setOfertaAccionId(null);
+    }
+  };
+
   const iniciarEdicion = (o) => {
+    if (o.estado === "descartada") {
+      setMensaje({
+        tipo: "error",
+        text: "Las ofertas descartadas no se pueden editar. Puedes eliminarlas si ya no las necesitas.",
+      });
+      return;
+    }
     setEditId(o.id);
     setForm({
       titulo: o.titulo || "",
@@ -528,13 +592,50 @@ export default function GestionOfertasEmpresa() {
                       Vendidos: {o.cuponesVendidos ?? 0}
                       {o.cantidadLimite != null ? ` / ${o.cantidadLimite}` : ""}
                     </p>
+                    {o.estado === "rechazada" && o.justificacionRechazo && (
+                      <div className="mt-3 rounded-xl border border-red-500/25 bg-red-950/25 px-3 py-2.5 text-xs text-red-100/95 leading-relaxed">
+                        <span className="font-semibold text-red-200/90">Motivo del rechazo: </span>
+                        {o.justificacionRechazo}
+                      </div>
+                    )}
                   </div>
                 </div>
-                <div className="flex gap-2 shrink-0">
+                <div className="flex flex-col sm:flex-row flex-wrap gap-2 shrink-0 items-stretch sm:items-center">
+                  {o.estado === "rechazada" && (
+                    <>
+                      <button
+                        type="button"
+                        disabled={ofertaAccionId === o.id}
+                        onClick={() => reenviarRevision(o.id)}
+                        className="text-sm px-4 py-2 rounded-xl border border-emerald-500/35 bg-emerald-500/12 text-emerald-100 font-semibold hover:bg-emerald-500/20 transition-colors disabled:opacity-40"
+                      >
+                        {ofertaAccionId === o.id ? "…" : "Reenviar a revisión"}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={ofertaAccionId === o.id}
+                        onClick={() => marcarDescartada(o.id)}
+                        className="text-sm px-4 py-2 rounded-xl border border-white/[0.12] bg-white/[0.06] text-white/80 font-semibold hover:bg-white/10 transition-colors disabled:opacity-40"
+                      >
+                        Descartar
+                      </button>
+                    </>
+                  )}
+                  {o.estado === "pendiente" && (
+                    <button
+                      type="button"
+                      disabled={ofertaAccionId === o.id}
+                      onClick={() => marcarDescartada(o.id)}
+                      className="text-sm px-4 py-2 rounded-xl border border-white/[0.12] bg-white/[0.06] text-white/80 font-semibold hover:bg-white/10 transition-colors disabled:opacity-40"
+                    >
+                      Descartar solicitud
+                    </button>
+                  )}
                   <button
                     type="button"
+                    disabled={o.estado === "descartada"}
                     onClick={() => iniciarEdicion(o)}
-                    className="text-sm px-4 py-2 rounded-xl border border-white/[0.12] bg-white/[0.06] text-white font-semibold hover:bg-white/10 transition-colors"
+                    className="text-sm px-4 py-2 rounded-xl border border-white/[0.12] bg-white/[0.06] text-white font-semibold hover:bg-white/10 transition-colors disabled:opacity-35 disabled:pointer-events-none"
                   >
                     Editar
                   </button>

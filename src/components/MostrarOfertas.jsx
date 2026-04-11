@@ -59,6 +59,17 @@ function formatFecha(fecha) {
   return d.toLocaleDateString("es-SV", { day:"2-digit", month:"short", year:"numeric" })
 }
 
+/** Incluye todo el día de fin (las ofertas guardan fecha a mediodía local). */
+function ofertaEnVigenciaCatalogo(ini, fin, ahora = new Date()) {
+  if (!ini || !fin) return false
+  const dIni = ini instanceof Date ? ini : new Date(ini)
+  const dFin = fin instanceof Date ? fin : new Date(fin)
+  if (Number.isNaN(dIni.getTime()) || Number.isNaN(dFin.getTime())) return false
+  const desde = new Date(dIni.getFullYear(), dIni.getMonth(), dIni.getDate())
+  const hasta = new Date(dFin.getFullYear(), dFin.getMonth(), dFin.getDate(), 23, 59, 59, 999)
+  return ahora >= desde && ahora <= hasta
+}
+
 const IcSearch = () => (
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/>
@@ -258,12 +269,11 @@ export default function MostrarOfertas() {
       const q = query(collection(db, "ofertas"), where("estado", "==", "aprobada"))
       const snap = await getDocs(q)
       const agruped = {}
-      const hoy = new Date()
       snap.forEach((docSnap) => {
         const o = { id: docSnap.id, ...docSnap.data() }
         const ini = o.fechaInicio?.toDate ? o.fechaInicio.toDate() : new Date(o.fechaInicio)
         const fin = o.fechaFin?.toDate ? o.fechaFin.toDate() : new Date(o.fechaFin)
-        if (ini > hoy || fin < hoy) return
+        if (!ofertaEnVigenciaCatalogo(ini, fin)) return
         if (o.cantidadLimite != null && (o.cuponesVendidos || 0) >= o.cantidadLimite) return
         const r = o.rubro || "Otros"
         if (!agruped[r]) agruped[r] = []

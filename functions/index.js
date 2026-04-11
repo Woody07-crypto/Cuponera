@@ -9,6 +9,9 @@ setGlobalOptions({ region: "us-central1" });
 initializeApp();
 const db = getFirestore();
 
+/** Gen 2 = Cloud Run: sin invoker público el preflight falla y el navegador muestra error CORS. */
+const callablePublicOpts = { cors: true, invoker: "public" };
+
 function duiSoloDigitos(dui) {
   return String(dui || "").replace(/\D/g, "");
 }
@@ -30,7 +33,7 @@ function empleadoMismaEmpresa(perfil, cupon) {
   return byId || byName;
 }
 
-export const canjearCupon = onCall(async (request) => {
+export const canjearCupon = onCall(callablePublicOpts, async (request) => {
   if (!request.auth?.uid) {
     throw new HttpsError("unauthenticated", "Debés iniciar sesión para canjear.");
   }
@@ -190,7 +193,7 @@ async function resolverCodigoEmpresaDesdeOfertaAdmin(oferta) {
  * Resuelve el prefijo de cupón (p. ej. EVS001) con privilegios de admin.
  * Evita fallos si el cliente no puede listar `empresas` o hay datos desincronizados.
  */
-export const resolverCodigoEmpresaCompra = onCall(async (request) => {
+export const resolverCodigoEmpresaCompra = onCall(callablePublicOpts, async (request) => {
   if (!request.auth?.uid) {
     throw new HttpsError("unauthenticated", "Iniciá sesión para comprar.");
   }

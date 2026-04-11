@@ -1,10 +1,9 @@
 import { useState } from "react";
-import { getFunctions, httpsCallable } from "firebase/functions";
 import { useGenerarCodigo } from "./useGenerarCodigo";
 import { guardarCompra, incrementarCuponesVendidos } from "../services/compraService";
 import { obtenerCodigoEmpresaParaOferta } from "../services/empresaService";
 import { useAuth } from "../context/AuthContext";
-import { app, db } from "../firebase/config";
+import { db } from "../firebase/config";
 
 function clienteDuiDesdePerfil(profile) {
   const raw = (profile?.dui || "").trim();
@@ -43,18 +42,7 @@ export function useCompra() {
       setError(null);
       setExitoso(false);
 
-      let codigoEmpresa = null;
-      try {
-        const functions = getFunctions(app, "us-central1");
-        const resolver = httpsCallable(functions, "resolverCodigoEmpresaCompra");
-        const res = await resolver({ ofertaId: oferta.id });
-        codigoEmpresa = res.data?.codigoEmpresa ?? null;
-      } catch (fnErr) {
-        console.warn("resolverCodigoEmpresaCompra (servidor):", fnErr?.code || fnErr?.message || fnErr);
-      }
-      if (!codigoEmpresa) {
-        codigoEmpresa = await obtenerCodigoEmpresaParaOferta(db, oferta);
-      }
+      const codigoEmpresa = await obtenerCodigoEmpresaParaOferta(db, oferta);
       if (!codigoEmpresa) {
         setError(
           "Esta empresa no tiene código AAA000 configurado. Un administrador debe completar los datos de la empresa antes de permitir compras."

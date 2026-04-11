@@ -23,15 +23,15 @@ export async function canjearCuponPorCodigo(codigo, duiPresente) {
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error("Debés iniciar sesión para canjear.");
 
-  const q = query(collection(db, "cupones"), where("codigo", "==", code), limit(1));
-  const qs = await getDocs(q);
-  if (qs.empty) {
-    throw new Error("No existe un cupón con ese código.");
-  }
-
-  const cuponRef = qs.docs[0].ref;
-
   try {
+    const q = query(collection(db, "cupones"), where("codigo", "==", code), limit(1));
+    const qs = await getDocs(q);
+    if (qs.empty) {
+      throw new Error("No existe un cupón con ese código.");
+    }
+
+    const cuponRef = qs.docs[0].ref;
+
     const titulo = await runTransaction(db, async (transaction) => {
       const fresh = await transaction.get(cuponRef);
       if (!fresh.exists()) {
@@ -74,7 +74,7 @@ export async function canjearCuponPorCodigo(codigo, duiPresente) {
 
     return { ok: true, titulo, codigo: code };
   } catch (err) {
-    // Errores lanzados dentro de la transacción (DUI, estado, etc.)
+    // Errores de negocio (sin código Firebase) lanzados en la transacción
     if (err instanceof Error && (err.code == null || err.code === "") && err.message) {
       throw err;
     }
@@ -82,9 +82,14 @@ export async function canjearCuponPorCodigo(codigo, duiPresente) {
     const code = String(err?.code || "");
     const msgLow = String(err?.message || "").toLowerCase();
 
-    if (code === "permission-denied" || code === "firestore/permission-denied" || code.includes("permission")) {
+    if (
+      code === "permission-denied" ||
+      code === "firestore/permission-denied" ||
+      code.includes("permission") ||
+      msgLow.includes("missing or insufficient permissions")
+    ) {
       throw new Error(
-        "Este cupón no corresponde a tu empresa o las reglas rechazaron el canje. Ejecutá: firebase deploy --only firestore:rules"
+        "No tenés permiso para ver o canjear este cupón. Comprobá que tu perfil sea «empleado» de la misma empresa que emitió el cupón (nombre o empresaId en Firestore) y que las reglas estén publicadas: firebase deploy --only firestore:rules"
       );
     }
     if (

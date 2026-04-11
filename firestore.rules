@@ -72,14 +72,17 @@ service cloud.firestore {
         adminEmpresaTransicionOfertaPermitida();
     }
 
-    /** Misma empresa: por ids, por nombre en perfil, o cupón sin empresaId pero nombre = empresa del perfil. */
+    /**
+     * Misma empresa: ids iguales; o nombre en perfil = nombre en cupón;
+     * o nombre del doc empresas/{perfil.empresaId} = nombreEmpresa del cupón
+     * (cubre cupón con empresaId null/erróneo pero nombre correcto).
+     */
     function empleadoPuedeVerCupon(cupon) {
       return isEmpleado() && (
         (perfilData().empresaId != null && cupon.empresaId == perfilData().empresaId) ||
         (perfilData().nombreEmpresa != null && cupon.nombreEmpresa == perfilData().nombreEmpresa) ||
         (
           perfilData().empresaId != null &&
-          cupon.empresaId == null &&
           cupon.nombreEmpresa != null &&
           exists(/databases/$(database)/documents/empresas/$(perfilData().empresaId)) &&
           get(/databases/$(database)/documents/empresas/$(perfilData().empresaId)).data.nombre == cupon.nombreEmpresa
@@ -98,34 +101,21 @@ service cloud.firestore {
         request.time <= resource.data.fechaLimiteCupon;
     }
 
-    /** El resto del cupón no se altera (evita diff/hasOnly que a veces dispara error internal). */
-    function cuponRestoIgualSalvoCanje() {
-      return request.resource.data.clienteUid == resource.data.clienteUid &&
-        request.resource.data.codigo == resource.data.codigo &&
-        request.resource.data.clienteDui == resource.data.clienteDui &&
-        request.resource.data.ofertaId == resource.data.ofertaId &&
-        request.resource.data.titulo == resource.data.titulo &&
-        request.resource.data.nombreEmpresa == resource.data.nombreEmpresa &&
-        request.resource.data.empresaId == resource.data.empresaId &&
-        request.resource.data.precio == resource.data.precio &&
-        request.resource.data.fechaLimiteCupon == resource.data.fechaLimiteCupon &&
-        request.resource.data.fechaCompra == resource.data.fechaCompra;
-    }
-
     /**
      * Canje sin Cloud Function (plan Spark): solo empleado de la misma empresa,
      * DUI presentado igual al del titular (mismo string que en el documento),
-     * y solo cambian campos de canje.
+     * y solo pueden cambiar los cuatro campos del canje (update parcial).
      */
     function empleadoPuedeRegistrarCanje() {
       return isEmpleado() &&
         empleadoPuedeVerCupon(resource.data) &&
         cuponDentroDeFechaLimite() &&
-        cuponRestoIgualSalvoCanje() &&
         resource.data.estado == 'disponible' &&
         request.resource.data.estado == 'canjeado' &&
         request.resource.data.canjeadoPorUid == request.auth.uid &&
-        request.resource.data.duiPresenteEnCanje == resource.data.clienteDui;
+        request.resource.data.duiPresenteEnCanje == resource.data.clienteDui &&
+        request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['estado', 'fechaCanje', 'canjeadoPorUid', 'duiPresenteEnCanje']);
     }
 
     function invitacionEmpleadoValida(userId) {

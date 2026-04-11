@@ -54,7 +54,7 @@ export function leerCodigoEmpresaDeData(data) {
 }
 
 /** Firestore a veces guarda empresaId como string o como referencia. */
-function empresaIdAString(empresaId) {
+export function empresaIdAString(empresaId) {
   if (empresaId == null || empresaId === "") return null;
   if (typeof empresaId === "string") return empresaId;
   if (typeof empresaId === "object" && typeof empresaId.id === "string") return empresaId.id;
@@ -182,6 +182,16 @@ export async function obtenerCodigoEmpresaParaOferta(db, oferta) {
 /**
  * Busca el id del documento en `empresas` por nombre (exacto o normalizado).
  */
+/** Id del doc `empresas` cuyo campo codigoEmpresa coincide (AAA000). */
+export async function buscarEmpresaIdPorCodigoEmpresa(db, codigoRaw) {
+  const v = validarCodigoEmpresa(codigoRaw);
+  if (!v.ok) return null;
+  const q = query(collection(db, "empresas"), where("codigoEmpresa", "==", v.value), limit(1));
+  const qs = await getDocs(q);
+  if (!qs.empty) return qs.docs[0].id;
+  return null;
+}
+
 export async function buscarEmpresaIdPorNombre(db, nombreRaw) {
   const nombre = String(nombreRaw ?? "")
     .replace(ZERO_WIDTH, "")

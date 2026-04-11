@@ -73,20 +73,49 @@ service cloud.firestore {
     }
 
     /**
-     * Misma empresa: ids iguales; o nombre en perfil = nombre en cupón;
-     * o nombre del doc empresas/{perfil.empresaId} = nombreEmpresa del cupón
-     * (cubre cupón con empresaId null/erróneo pero nombre correcto).
+     * Doc empresas del perfil. Solo usar cuando perfilData().empresaId != null
+     * y exists(/empresas/{ese id}) (short-circuit en la condición).
+     */
+    function empresaDelPerfil() {
+      return get(/databases/$(database)/documents/empresas/$(perfilData().empresaId)).data;
+    }
+
+    /**
+     * Cupón emitido con prefijo codigoEmpresa de la empresa del empleado (EVS001 + 7 dígitos).
+     * Cubre cupones con nombreEmpresa distinto al campo nombre en empresas.
+     */
+    function empleadoPuedeVerCuponPorPrefijoCodigo(cupon) {
+      return perfilData().empresaId != null &&
+        exists(/databases/$(database)/documents/empresas/$(perfilData().empresaId)) &&
+        cupon.codigo is string &&
+        empresaDelPerfil().codigoEmpresa is string &&
+        empresaDelPerfil().codigoEmpresa.size() == 6 &&
+        cupon.codigo.matches(
+          '^' + empresaDelPerfil().codigoEmpresa + '[0-9]{7}$'
+        );
+    }
+
+    /**
+     * Misma empresa: ids iguales; o nombre en perfil = nombre en cupón (sin distinguir mayúsculas);
+     * o nombre del doc empresas/{perfil.empresaId} = nombreEmpresa del cupón (idem);
+     * o prefijo del código = codigoEmpresa de esa empresa.
      */
     function empleadoPuedeVerCupon(cupon) {
       return isEmpleado() && (
         (perfilData().empresaId != null && cupon.empresaId == perfilData().empresaId) ||
-        (perfilData().nombreEmpresa != null && cupon.nombreEmpresa == perfilData().nombreEmpresa) ||
+        (
+          perfilData().nombreEmpresa is string &&
+          cupon.nombreEmpresa is string &&
+          perfilData().nombreEmpresa.lower() == cupon.nombreEmpresa.lower()
+        ) ||
         (
           perfilData().empresaId != null &&
-          cupon.nombreEmpresa != null &&
+          cupon.nombreEmpresa is string &&
           exists(/databases/$(database)/documents/empresas/$(perfilData().empresaId)) &&
-          get(/databases/$(database)/documents/empresas/$(perfilData().empresaId)).data.nombre == cupon.nombreEmpresa
-        )
+          empresaDelPerfil().nombre is string &&
+          empresaDelPerfil().nombre.lower() == cupon.nombreEmpresa.lower()
+        ) ||
+        empleadoPuedeVerCuponPorPrefijoCodigo(cupon)
       );
     }
 

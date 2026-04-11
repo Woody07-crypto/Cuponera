@@ -89,7 +89,7 @@ export async function canjearCuponPorCodigo(codigo, duiPresente) {
       msgLow.includes("missing or insufficient permissions")
     ) {
       throw new Error(
-        "No tenés permiso para ver o canjear este cupón. Comprobá que tu perfil sea «empleado» de la misma empresa que emitió el cupón (nombre o empresaId en Firestore) y que las reglas estén publicadas: firebase deploy --only firestore:rules"
+        "No tenés permiso para ver o canjear este cupón. Comprobá que tu perfil sea «empleado» vinculado a la empresa correcta (empresaId en el perfil, o nombreEmpresa, o que el código empiece con el codigoEmpresa de esa empresa en Firestore) y que las reglas estén actualizadas."
       );
     }
     if (

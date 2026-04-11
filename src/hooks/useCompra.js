@@ -1,7 +1,13 @@
 import { useState } from "react";
 import { useGenerarCodigo } from "./useGenerarCodigo";
 import { guardarCompra, incrementarCuponesVendidos } from "../services/compraService";
-import { obtenerCodigoEmpresaParaOferta } from "../services/empresaService";
+import {
+  buscarEmpresaIdPorCodigoEmpresa,
+  buscarEmpresaIdPorNombre,
+  empresaIdAString,
+  nombreEmpresaEnOferta,
+  obtenerCodigoEmpresaParaOferta,
+} from "../services/empresaService";
 import { useAuth } from "../context/AuthContext";
 import { db } from "../firebase/config";
 
@@ -50,6 +56,14 @@ export function useCompra() {
         return false;
       }
 
+      let empresaIdCupon = empresaIdAString(oferta?.empresaId);
+      if (!empresaIdCupon) {
+        empresaIdCupon = await buscarEmpresaIdPorCodigoEmpresa(db, codigoEmpresa);
+      }
+      if (!empresaIdCupon) {
+        empresaIdCupon = await buscarEmpresaIdPorNombre(db, nombreEmpresaEnOferta(oferta));
+      }
+
       const nuevosCodigos = [];
 
       for (let i = 0; i < cantidad; i++) {
@@ -60,7 +74,7 @@ export function useCompra() {
           ofertaId: oferta.id,
           titulo: oferta.titulo,
           nombreEmpresa: oferta.nombreEmpresa,
-          empresaId: oferta.empresaId ?? null,
+          empresaId: empresaIdCupon,
           precio: oferta.precioOferta,
           codigo,
           clienteDui,

@@ -1,5 +1,14 @@
 import { useEffect, useState } from "react";
-import { collection, getDocs } from "firebase/firestore";
+import {
+  collection,
+  getDocs,
+  query,
+  where,
+  updateDoc,
+  doc,
+  deleteDoc,
+  addDoc,
+} from "firebase/firestore";
 import { db } from "../firebase/config";
 import {
   listarPerfiles,
@@ -72,28 +81,42 @@ export default function AdminPanel() {
   const [error, setError] = useState(null);
   const [rolesError, setRolesError] = useState(null);
   const [detalle, setDetalle] = useState(null);
+
   const [nuevoUid, setNuevoUid] = useState("");
   const [nuevoRol, setNuevoRol] = useState("admin");
   const [nuevoCorreo, setNuevoCorreo] = useState("");
+  const [nuevoEmpresaId, setNuevoEmpresaId] = useState("");
+  const [nuevoNombreEmpresa, setNuevoNombreEmpresa] = useState("");
   const [savingUid, setSavingUid] = useState(null);
   const [creandoPerfil, setCreandoPerfil] = useState(false);
+
+  const [ofertasPendientes, setOfertasPendientes] = useState([]);
+  const [ofertasLoading, setOfertasLoading] = useState(false);
+  const [accionOfertaLoading, setAccionOfertaLoading] = useState(null);
+
+  const [nuevaEmpresa, setNuevaEmpresa] = useState({
+    nombre: "",
+    correo: "",
+    rubro: "",
+  });
+  const [creandoEmpresa, setCreandoEmpresa] = useState(false);
+  const [empresaMsg, setEmpresaMsg] = useState(null);
+
+  const cargarDatosBase = async () => {
+    const [eSnap, cSnap] = await Promise.all([
+      getDocs(collection(db, "empresas")),
+      getDocs(collection(db, "clientes")),
+    ]);
+    setEmpresas(eSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+    setClientes(cSnap.docs.map((d) => ({ id: d.id, ...d.data() })));
+  };
 
   useEffect(() => {
     let alive = true;
     (async () => {
       try {
         setLoading(true);
-        const [eSnap, cSnap] = await Promise.all([
-          getDocs(collection(db, "empresas")),
-          getDocs(collection(db, "clientes")),
-        ]);
-        if (!alive) return;
-        setEmpresas(
-          eSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
-        );
-        setClientes(
-          cSnap.docs.map((d) => ({ id: d.id, ...d.data() }))
-        );
+        await cargarDatosBase();
       } catch (err) {
         console.error(err);
         if (alive) setError("No se pudieron cargar los datos.");
@@ -118,7 +141,10 @@ export default function AdminPanel() {
         setPerfiles(list);
         setRoleDraft(
           Object.fromEntries(
-            list.map((p) => [p.id, ROLES_ORDENADOS.includes(p.role) ? p.role : "cliente"])
+            list.map((p) => [
+              p.id,
+              ROLES_ORDENADOS.includes(p.role) ? p.role : "cliente",
+            ])
           )
         );
       } catch (err) {
@@ -128,6 +154,34 @@ export default function AdminPanel() {
         if (alive) setRolesLoading(false);
       }
     })();
+    return () => {
+      alive = false;
+    };
+  }, [tab]);
+
+  useEffect(() => {
+    if (tab !== "ofertas") return;
+    let alive = true;
+
+    (async () => {
+      try {
+        setOfertasLoading(true);
+        setRolesError(null);
+        const q = query(
+          collection(db, "ofertas"),
+          where("estado", "==", "pendiente")
+        );
+        const snap = await getDocs(q);
+        if (!alive) return;
+        setOfertasPendientes(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
+      } catch (err) {
+        console.error(err);
+        if (alive) setRolesError("No se pudieron cargar las ofertas pendientes.");
+      } finally {
+        if (alive) setOfertasLoading(false);
+      }
+    })();
+
     return () => {
       alive = false;
     };
@@ -158,25 +212,106 @@ export default function AdminPanel() {
       setRolesError("Pega el UID completo del usuario (Firebase Authentication).");
       return;
     }
+
     setCreandoPerfil(true);
     setRolesError(null);
+
     try {
-      const extra = nuevoCorreo.trim() ? { correo: nuevoCorreo.trim() } : {};
+      const extra = {};
+      if (nuevoCorreo.trim()) extra.correo = nuevoCorreo.trim();
+      if (nuevoEmpresaId.trim()) extra.empresaId = nuevoEmpresaId.trim();
+      if (nuevoNombreEmpresa.trim()) extra.nombreEmpresa = nuevoNombreEmpresa.trim();
+
       await guardarRolPerfil(db, uid, nuevoRol, extra);
+
       const list = await listarPerfiles(db);
       setPerfiles(list);
       setRoleDraft(
         Object.fromEntries(
-          list.map((p) => [p.id, ROLES_ORDENADOS.includes(p.role) ? p.role : "cliente"])
+          list.map((p) => [
+            p.id,
+            ROLES_ORDENADOS.includes(p.role) ? p.role : "cliente",
+          ])
         )
       );
+
       setNuevoUid("");
       setNuevoCorreo("");
+      setNuevoEmpresaId("");
+      setNuevoNombreEmpresa("");
     } catch (err) {
       console.error(err);
       setRolesError("No se pudo crear el perfil.");
     } finally {
       setCreandoPerfil(false);
+    }
+  };
+
+  const aprobarOferta = async (id) => {
+    try {
+      setAccionOfertaLoading(id);
+      setRolesError(null);
+      await updateDoc(doc(db, "ofertas", id), {
+        estado: "aprobada",
+      });
+      setOfertasPendientes((prev) => prev.filter((o) => o.id !== id));
+    } catch (err) {
+      console.error(err);
+      setRolesError("No se pudo aprobar la oferta.");
+    } finally {
+      setAccionOfertaLoading(null);
+    }
+  };
+
+  const rechazarOferta = async (id) => {
+    try {
+      setAccionOfertaLoading(id);
+      setRolesError(null);
+      await deleteDoc(doc(db, "ofertas", id));
+      setOfertasPendientes((prev) => prev.filter((o) => o.id !== id));
+    } catch (err) {
+      console.error(err);
+      setRolesError("No se pudo rechazar la oferta.");
+    } finally {
+      setAccionOfertaLoading(null);
+    }
+  };
+
+  const handleCrearEmpresa = async (e) => {
+    e.preventDefault();
+    const nombre = nuevaEmpresa.nombre.trim();
+    const correo = nuevaEmpresa.correo.trim();
+    const rubro = nuevaEmpresa.rubro.trim();
+
+    if (!nombre || !correo || !rubro) {
+      setEmpresaMsg({ tipo: "error", texto: "Completa nombre, correo y rubro." });
+      return;
+    }
+
+    setCreandoEmpresa(true);
+    setEmpresaMsg(null);
+
+    try {
+      await addDoc(collection(db, "empresas"), {
+        nombre,
+        correo,
+        rubro,
+      });
+
+      await cargarDatosBase();
+
+      setNuevaEmpresa({
+        nombre: "",
+        correo: "",
+        rubro: "",
+      });
+
+      setEmpresaMsg({ tipo: "ok", texto: "Empresa creada correctamente." });
+    } catch (err) {
+      console.error(err);
+      setEmpresaMsg({ tipo: "error", texto: "No se pudo crear la empresa." });
+    } finally {
+      setCreandoEmpresa(false);
     }
   };
 
@@ -203,8 +338,10 @@ export default function AdminPanel() {
     tab === "empresas"
       ? "Empresas registradas"
       : tab === "clientes"
-        ? "Clientes registrados"
-        : "Perfiles y roles";
+      ? "Clientes registrados"
+      : tab === "roles"
+      ? "Perfiles y roles"
+      : "Ofertas pendientes de aprobación";
 
   return (
     <div className="min-h-screen bg-[#0f1a13] py-10 px-4 sm:px-6 text-white font-sans">
@@ -222,6 +359,7 @@ export default function AdminPanel() {
             { id: "empresas", label: "Empresas" },
             { id: "clientes", label: "Clientes" },
             { id: "roles", label: "Roles" },
+            { id: "ofertas", label: "Ofertas" },
           ].map((t) => (
             <button
               key={t.id}
@@ -258,6 +396,7 @@ export default function AdminPanel() {
                 <code className="text-gray-300">perfiles/&lt;uid&gt;</code>. El UID lo
                 obtienes en Firebase Console → Authentication → Usuario.
               </p>
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="md:col-span-2">
                   <label className={labelClass}>UID</label>
@@ -284,6 +423,7 @@ export default function AdminPanel() {
                   </select>
                 </div>
               </div>
+
               <div>
                 <label className={labelClass}>Correo (opcional)</label>
                 <input
@@ -294,6 +434,30 @@ export default function AdminPanel() {
                   className="mt-1 w-full px-3 py-2 rounded-lg bg-[#0f1a13] border border-gray-600 text-white text-sm"
                 />
               </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className={labelClass}>Empresa ID (opcional)</label>
+                  <input
+                    type="text"
+                    value={nuevoEmpresaId}
+                    onChange={(e) => setNuevoEmpresaId(e.target.value)}
+                    placeholder="ID del documento en empresas"
+                    className="mt-1 w-full px-3 py-2 rounded-lg bg-[#0f1a13] border border-gray-600 text-white text-sm"
+                  />
+                </div>
+                <div>
+                  <label className={labelClass}>Nombre empresa (opcional)</label>
+                  <input
+                    type="text"
+                    value={nuevoNombreEmpresa}
+                    onChange={(e) => setNuevoNombreEmpresa(e.target.value)}
+                    placeholder="Nombre exacto de la empresa"
+                    className="mt-1 w-full px-3 py-2 rounded-lg bg-[#0f1a13] border border-gray-600 text-white text-sm"
+                  />
+                </div>
+              </div>
+
               <button
                 type="submit"
                 disabled={creandoPerfil}
@@ -310,8 +474,6 @@ export default function AdminPanel() {
             ) : perfiles.length === 0 ? (
               <div className="rounded-xl border border-gray-600 bg-[#1a241b] p-10 text-center text-gray-400 text-sm">
                 Aún no hay documentos en <code className="text-[#ACCC7B]">perfiles</code>.
-                Los nuevos registros de cliente ya crean su perfil automáticamente; para
-                administradores usa el formulario de arriba.
               </div>
             ) : (
               <div className="rounded-xl border border-gray-600 overflow-hidden bg-[#1a241b]">
@@ -385,84 +547,289 @@ export default function AdminPanel() {
               </div>
             )}
           </div>
+        ) : tab === "ofertas" ? (
+          <div className="space-y-4">
+            {rolesError && (
+              <div className="rounded-lg border border-red-800/60 bg-red-950/40 text-red-300 px-4 py-3 text-sm">
+                {rolesError}
+              </div>
+            )}
+
+            {ofertasLoading ? (
+              <p className="text-[#ACCC7B] text-sm font-medium animate-pulse">
+                Cargando ofertas pendientes…
+              </p>
+            ) : ofertasPendientes.length === 0 ? (
+              <div className="rounded-xl border border-gray-600 bg-[#1a241b] p-10 text-center text-gray-400 text-sm">
+                No hay ofertas pendientes de aprobación.
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {ofertasPendientes.map((oferta) => (
+                  <div
+                    key={oferta.id}
+                    className="rounded-xl border border-gray-600 bg-[#1a241b] p-5 flex flex-col gap-4"
+                  >
+                    <div>
+                      <h3 className="text-lg font-bold text-white">
+                        {oferta.titulo || "Sin título"}
+                      </h3>
+                      <p className="text-sm text-gray-400 mt-1">
+                        {oferta.descripcion || "Sin descripción"}
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-300">
+                      <p>
+                        <span className={labelClass}>Empresa:</span>{" "}
+                        {oferta.nombreEmpresa || "—"}
+                      </p>
+                      <p>
+                        <span className={labelClass}>Rubro:</span> {oferta.rubro || "—"}
+                      </p>
+                      <p>
+                        <span className={labelClass}>Precio regular:</span> $
+                        {oferta.precioRegular ?? "—"}
+                      </p>
+                      <p>
+                        <span className={labelClass}>Precio oferta:</span> $
+                        {oferta.precioOferta ?? "—"}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => aprobarOferta(oferta.id)}
+                        disabled={accionOfertaLoading === oferta.id}
+                        className="px-4 py-2 rounded-lg bg-[#668A4C] hover:bg-[#557a3d] disabled:opacity-50 text-sm font-semibold"
+                      >
+                        {accionOfertaLoading === oferta.id ? "Procesando…" : "Aprobar"}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => rechazarOferta(oferta.id)}
+                        disabled={accionOfertaLoading === oferta.id}
+                        className="px-4 py-2 rounded-lg bg-red-900/50 hover:bg-red-800/60 disabled:opacity-50 text-sm font-semibold text-red-200"
+                      >
+                        Rechazar
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         ) : lista.length === 0 ? (
-          <div className="rounded-xl border border-gray-600 bg-[#1a241b] p-10 text-center text-gray-400">
-            No hay registros en la colección{" "}
-            <span className="text-[#ACCC7B]">{tab}</span>. Tu equipo puede
-            cargar datos en Firestore (colecciones{" "}
-            <code className="text-gray-300">empresas</code> y{" "}
-            <code className="text-gray-300">clientes</code>).
+          <div className="space-y-6">
+            {tab === "empresas" && (
+              <form
+                onSubmit={handleCrearEmpresa}
+                className="rounded-xl border border-gray-600 bg-[#1a241b] p-6 space-y-4"
+              >
+                <h3 className="text-lg font-bold text-white">Crear empresa</h3>
+
+                {empresaMsg && (
+                  <div
+                    className={`rounded-lg px-4 py-3 text-sm ${
+                      empresaMsg.tipo === "ok"
+                        ? "border border-green-700 bg-green-900/30 text-green-200"
+                        : "border border-red-700 bg-red-900/30 text-red-200"
+                    }`}
+                  >
+                    {empresaMsg.texto}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className={labelClass}>Nombre</label>
+                    <input
+                      type="text"
+                      value={nuevaEmpresa.nombre}
+                      onChange={(e) =>
+                        setNuevaEmpresa((prev) => ({ ...prev, nombre: e.target.value }))
+                      }
+                      className="mt-1 w-full px-3 py-2 rounded-lg bg-[#0f1a13] border border-gray-600 text-white text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Correo</label>
+                    <input
+                      type="email"
+                      value={nuevaEmpresa.correo}
+                      onChange={(e) =>
+                        setNuevaEmpresa((prev) => ({ ...prev, correo: e.target.value }))
+                      }
+                      className="mt-1 w-full px-3 py-2 rounded-lg bg-[#0f1a13] border border-gray-600 text-white text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Rubro</label>
+                    <input
+                      type="text"
+                      value={nuevaEmpresa.rubro}
+                      onChange={(e) =>
+                        setNuevaEmpresa((prev) => ({ ...prev, rubro: e.target.value }))
+                      }
+                      className="mt-1 w-full px-3 py-2 rounded-lg bg-[#0f1a13] border border-gray-600 text-white text-sm"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={creandoEmpresa}
+                  className="px-5 py-2.5 rounded-lg bg-[#668A4C] hover:bg-[#557a3d] disabled:opacity-50 font-semibold text-sm"
+                >
+                  {creandoEmpresa ? "Guardando…" : "Crear empresa"}
+                </button>
+              </form>
+            )}
+
+            <div className="rounded-xl border border-gray-600 bg-[#1a241b] p-10 text-center text-gray-400">
+              No hay registros en la colección{" "}
+              <span className="text-[#ACCC7B]">{tab}</span>.
+            </div>
           </div>
         ) : (
-          <div className="rounded-xl border border-gray-600 overflow-hidden bg-[#1a241b]">
-            <table className="w-full text-left text-sm">
-              <thead className="bg-[#243028] text-gray-400">
-                <tr>
-                  {tab === "empresas" ? (
-                    <>
-                      <th className="px-4 py-3 font-semibold">Nombre</th>
-                      <th className="px-4 py-3 font-semibold hidden sm:table-cell">
-                        Contacto
-                      </th>
-                      <th className="px-4 py-3 font-semibold hidden md:table-cell">
-                        Rubro
-                      </th>
-                    </>
-                  ) : (
-                    <>
-                      <th className="px-4 py-3 font-semibold">Nombre</th>
-                      <th className="px-4 py-3 font-semibold hidden sm:table-cell">
-                        Correo
-                      </th>
-                      <th className="px-4 py-3 font-semibold hidden md:table-cell">
-                        Teléfono
-                      </th>
-                    </>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {tab === "empresas"
-                  ? empresas.map((row) => (
-                      <tr
-                        key={row.id}
-                        className={rowClass}
-                        onClick={() => setDetalle({ tipo: "Empresa", row })}
-                      >
-                        <td className="px-4 py-3 font-medium text-white">
-                          {row.nombre || row.nombreComercial || row.id}
-                        </td>
-                        <td className="px-4 py-3 text-gray-300 hidden sm:table-cell">
-                          {row.email || row.correo || row.emailContacto || "—"}
-                        </td>
-                        <td className="px-4 py-3 text-gray-300 hidden md:table-cell">
-                          {row.rubro || "—"}
-                        </td>
-                      </tr>
-                    ))
-                  : clientes.map((row) => (
-                      <tr
-                        key={row.id}
-                        className={rowClass}
-                        onClick={() => setDetalle({ tipo: "Cliente", row })}
-                      >
-                        <td className="px-4 py-3 font-medium text-white">
-                          {[row.nombres, row.apellidos].filter(Boolean).join(" ") ||
-                            row.id}
-                        </td>
-                        <td className="px-4 py-3 text-gray-300 hidden sm:table-cell">
-                          {row.correo || "—"}
-                        </td>
-                        <td className="px-4 py-3 text-gray-300 hidden md:table-cell">
-                          {row.telefono || "—"}
-                        </td>
-                      </tr>
-                    ))}
-              </tbody>
-            </table>
-            <p className="text-xs text-gray-500 px-4 py-3 border-t border-gray-700">
-              Toca una fila para ver todos los campos guardados en Firestore.
-            </p>
+          <div className="space-y-6">
+            {tab === "empresas" && (
+              <form
+                onSubmit={handleCrearEmpresa}
+                className="rounded-xl border border-gray-600 bg-[#1a241b] p-6 space-y-4"
+              >
+                <h3 className="text-lg font-bold text-white">Crear empresa</h3>
+
+                {empresaMsg && (
+                  <div
+                    className={`rounded-lg px-4 py-3 text-sm ${
+                      empresaMsg.tipo === "ok"
+                        ? "border border-green-700 bg-green-900/30 text-green-200"
+                        : "border border-red-700 bg-red-900/30 text-red-200"
+                    }`}
+                  >
+                    {empresaMsg.texto}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className={labelClass}>Nombre</label>
+                    <input
+                      type="text"
+                      value={nuevaEmpresa.nombre}
+                      onChange={(e) =>
+                        setNuevaEmpresa((prev) => ({ ...prev, nombre: e.target.value }))
+                      }
+                      className="mt-1 w-full px-3 py-2 rounded-lg bg-[#0f1a13] border border-gray-600 text-white text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Correo</label>
+                    <input
+                      type="email"
+                      value={nuevaEmpresa.correo}
+                      onChange={(e) =>
+                        setNuevaEmpresa((prev) => ({ ...prev, correo: e.target.value }))
+                      }
+                      className="mt-1 w-full px-3 py-2 rounded-lg bg-[#0f1a13] border border-gray-600 text-white text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelClass}>Rubro</label>
+                    <input
+                      type="text"
+                      value={nuevaEmpresa.rubro}
+                      onChange={(e) =>
+                        setNuevaEmpresa((prev) => ({ ...prev, rubro: e.target.value }))
+                      }
+                      className="mt-1 w-full px-3 py-2 rounded-lg bg-[#0f1a13] border border-gray-600 text-white text-sm"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={creandoEmpresa}
+                  className="px-5 py-2.5 rounded-lg bg-[#668A4C] hover:bg-[#557a3d] disabled:opacity-50 font-semibold text-sm"
+                >
+                  {creandoEmpresa ? "Guardando…" : "Crear empresa"}
+                </button>
+              </form>
+            )}
+
+            <div className="rounded-xl border border-gray-600 overflow-hidden bg-[#1a241b]">
+              <table className="w-full text-left text-sm">
+                <thead className="bg-[#243028] text-gray-400">
+                  <tr>
+                    {tab === "empresas" ? (
+                      <>
+                        <th className="px-4 py-3 font-semibold">Nombre</th>
+                        <th className="px-4 py-3 font-semibold hidden sm:table-cell">
+                          Contacto
+                        </th>
+                        <th className="px-4 py-3 font-semibold hidden md:table-cell">
+                          Rubro
+                        </th>
+                      </>
+                    ) : (
+                      <>
+                        <th className="px-4 py-3 font-semibold">Nombre</th>
+                        <th className="px-4 py-3 font-semibold hidden sm:table-cell">
+                          Correo
+                        </th>
+                        <th className="px-4 py-3 font-semibold hidden md:table-cell">
+                          Teléfono
+                        </th>
+                      </>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                  {tab === "empresas"
+                    ? empresas.map((row) => (
+                        <tr
+                          key={row.id}
+                          className={rowClass}
+                          onClick={() => setDetalle({ tipo: "Empresa", row })}
+                        >
+                          <td className="px-4 py-3 font-medium text-white">
+                            {row.nombre || row.nombreComercial || row.id}
+                          </td>
+                          <td className="px-4 py-3 text-gray-300 hidden sm:table-cell">
+                            {row.email || row.correo || row.emailContacto || "—"}
+                          </td>
+                          <td className="px-4 py-3 text-gray-300 hidden md:table-cell">
+                            {row.rubro || "—"}
+                          </td>
+                        </tr>
+                      ))
+                    : clientes.map((row) => (
+                        <tr
+                          key={row.id}
+                          className={rowClass}
+                          onClick={() => setDetalle({ tipo: "Cliente", row })}
+                        >
+                          <td className="px-4 py-3 font-medium text-white">
+                            {[row.nombres, row.apellidos].filter(Boolean).join(" ") ||
+                              row.id}
+                          </td>
+                          <td className="px-4 py-3 text-gray-300 hidden sm:table-cell">
+                            {row.correo || "—"}
+                          </td>
+                          <td className="px-4 py-3 text-gray-300 hidden md:table-cell">
+                            {row.telefono || "—"}
+                          </td>
+                        </tr>
+                      ))}
+                </tbody>
+              </table>
+              <p className="text-xs text-gray-500 px-4 py-3 border-t border-gray-700">
+                Toca una fila para ver todos los campos guardados en Firestore.
+              </p>
+            </div>
           </div>
         )}
       </div>

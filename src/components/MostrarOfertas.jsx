@@ -258,7 +258,7 @@ export default function MostrarOfertas() {
         agruped[r].push({ ...o, fechaInicio:ini, fechaFin:fin })
       })
       setOfertasPorRubro(agruped)
-      const rubros = Object.keys(agruped)
+      const rubros = Object.keys(ofertasPorRubro).sort((a, b) => a.localeCompare(b))
       if (rubros.length) setRubroActivo(rubros[0])
     } catch { setError("No se pudieron cargar las ofertas.") }
     finally  { setLoading(false) }

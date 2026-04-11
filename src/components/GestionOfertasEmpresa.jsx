@@ -58,9 +58,11 @@ export default function GestionOfertasEmpresa() {
       setLoading(false);
       return;
     }
+
     setLoading(true);
     try {
       let snap;
+
       if (empresaId) {
         const q = query(
           collection(db, "ofertas"),
@@ -74,6 +76,7 @@ export default function GestionOfertasEmpresa() {
         );
         snap = await getDocs(q);
       }
+
       setOfertas(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
     } catch (e) {
       console.error(e);
@@ -89,16 +92,34 @@ export default function GestionOfertasEmpresa() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!nombreEmpresa && !empresaId) {
+
+    if (!empresaId && !nombreEmpresa) {
       setMensaje({
         tipo: "error",
-        text: "Tu perfil debe incluir empresaId y/o nombreEmpresa en Firestore (perfiles).",
+        text: "Tu perfil debe tener empresaId o nombreEmpresa para crear ofertas.",
+      });
+      return;
+    }
+
+    if (Number(form.precioOferta) > Number(form.precioRegular)) {
+      setMensaje({
+        tipo: "error",
+        text: "El precio de oferta no puede ser mayor al precio regular.",
+      });
+      return;
+    }
+
+    if (form.fechaInicio && form.fechaFin && form.fechaInicio > form.fechaFin) {
+      setMensaje({
+        tipo: "error",
+        text: "La fecha de inicio no puede ser mayor que la fecha fin.",
       });
       return;
     }
 
     setSaving(true);
     setMensaje(null);
+
     try {
       const payload = {
         titulo: form.titulo.trim(),
@@ -106,25 +127,18 @@ export default function GestionOfertasEmpresa() {
         precioRegular: Number(form.precioRegular),
         precioOferta: Number(form.precioOferta),
         rubro: form.rubro.trim(),
-        nombreEmpresa: nombreEmpresa || form.titulo,
+        nombreEmpresa: nombreEmpresa || "",
         empresaId: empresaId || null,
         fechaInicio: toTimestamp(form.fechaInicio),
         fechaFin: toTimestamp(form.fechaFin),
         fechaLimiteCupon: toTimestamp(form.fechaLimiteCupon),
         cantidadLimite:
           form.cantidadLimite === "" ? null : Number(form.cantidadLimite),
-        cuponesVendidos: editId
-          ? undefined
-          : 0,
-        estado: editId ? undefined : "pendiente",
       };
 
       if (editId) {
         const ref = doc(db, "ofertas", editId);
-        const clean = Object.fromEntries(
-          Object.entries(payload).filter(([, v]) => v !== undefined)
-        );
-        await updateDoc(ref, clean);
+        await updateDoc(ref, payload);
         setMensaje({ tipo: "ok", text: "Oferta actualizada." });
       } else {
         await addDoc(collection(db, "ofertas"), {
@@ -168,13 +182,16 @@ export default function GestionOfertasEmpresa() {
 
   const eliminar = async (id) => {
     if (!confirm("¿Eliminar esta oferta?")) return;
+
     try {
       await deleteDoc(doc(db, "ofertas", id));
       setMensaje({ tipo: "ok", text: "Oferta eliminada." });
+
       if (editId === id) {
         setEditId(null);
         setForm(emptyForm);
       }
+
       await cargar();
     } catch (err) {
       console.error(err);
@@ -194,10 +211,17 @@ export default function GestionOfertasEmpresa() {
     <div className="min-h-screen bg-[#0f1a13] py-10 px-4 sm:px-6 text-white">
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-extrabold mb-2">Gestión de ofertas</h1>
-        <p className="text-gray-400 mb-8">
+        <p className="text-gray-400 mb-2">
           Administra las ofertas de tu empresa. Las nuevas quedan en estado{" "}
           <strong className="text-[#ACCC7B]">pendiente</strong> hasta que el
           administrador las apruebe.
+        </p>
+
+        <p className="text-sm text-gray-500 mb-8">
+          Empresa vinculada:{" "}
+          <span className="text-white">
+            {nombreEmpresa || empresaId || "No configurada"}
+          </span>
         </p>
 
         {mensaje && (
@@ -219,6 +243,7 @@ export default function GestionOfertasEmpresa() {
           <h2 className="text-lg font-bold">
             {editId ? "Editar oferta" : "Nueva oferta"}
           </h2>
+
           <div className="grid sm:grid-cols-2 gap-4">
             <div className="sm:col-span-2">
               <label className="block text-xs text-gray-400 mb-1">Título</label>
@@ -229,6 +254,7 @@ export default function GestionOfertasEmpresa() {
                 required
               />
             </div>
+
             <div className="sm:col-span-2">
               <label className="block text-xs text-gray-400 mb-1">
                 Descripción
@@ -242,6 +268,7 @@ export default function GestionOfertasEmpresa() {
                 required
               />
             </div>
+
             <div>
               <label className="block text-xs text-gray-400 mb-1">Rubro</label>
               <input
@@ -251,6 +278,7 @@ export default function GestionOfertasEmpresa() {
                 required
               />
             </div>
+
             <div>
               <label className="block text-xs text-gray-400 mb-1">
                 Límite de cupones (opcional)
@@ -265,6 +293,7 @@ export default function GestionOfertasEmpresa() {
                 }
               />
             </div>
+
             <div>
               <label className="block text-xs text-gray-400 mb-1">
                 Precio regular
@@ -281,6 +310,7 @@ export default function GestionOfertasEmpresa() {
                 required
               />
             </div>
+
             <div>
               <label className="block text-xs text-gray-400 mb-1">
                 Precio oferta
@@ -297,6 +327,7 @@ export default function GestionOfertasEmpresa() {
                 required
               />
             </div>
+
             <div>
               <label className="block text-xs text-gray-400 mb-1">
                 Vigencia desde
@@ -311,6 +342,7 @@ export default function GestionOfertasEmpresa() {
                 required
               />
             </div>
+
             <div>
               <label className="block text-xs text-gray-400 mb-1">
                 Vigencia hasta
@@ -323,6 +355,7 @@ export default function GestionOfertasEmpresa() {
                 required
               />
             </div>
+
             <div>
               <label className="block text-xs text-gray-400 mb-1">
                 Canjear cupón antes de
@@ -338,6 +371,7 @@ export default function GestionOfertasEmpresa() {
               />
             </div>
           </div>
+
           <div className="flex flex-wrap gap-3 pt-2">
             <button
               type="submit"
@@ -346,6 +380,7 @@ export default function GestionOfertasEmpresa() {
             >
               {saving ? "Guardando…" : editId ? "Actualizar" : "Crear oferta"}
             </button>
+
             {editId && (
               <button
                 type="button"
@@ -362,6 +397,7 @@ export default function GestionOfertasEmpresa() {
         </form>
 
         <h2 className="text-xl font-bold mb-4">Tus ofertas</h2>
+
         {ofertas.length === 0 ? (
           <p className="text-gray-500">
             Aún no hay ofertas asociadas a tu empresa en Firestore.
@@ -382,11 +418,10 @@ export default function GestionOfertasEmpresa() {
                     </span>
                     {" · "}
                     Vendidos: {o.cuponesVendidos ?? 0}
-                    {o.cantidadLimite != null
-                      ? ` / ${o.cantidadLimite}`
-                      : ""}
+                    {o.cantidadLimite != null ? ` / ${o.cantidadLimite}` : ""}
                   </p>
                 </div>
+
                 <div className="flex gap-2 shrink-0">
                   <button
                     type="button"

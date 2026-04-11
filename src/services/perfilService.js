@@ -6,6 +6,7 @@ import {
   getDocs,
   serverTimestamp,
 } from "firebase/firestore";
+import { empresaIdAString } from "./empresaService";
 
 /** Roles reconocidos por la app (rutas y navbar). */
 export const ROLES = {
@@ -36,6 +37,10 @@ export async function fetchRoleAndProfile(db, uid, email) {
     let profile = { id: uid, ...data };
     if (role === ROLES.CLIENTE && clienteSnap.exists()) {
       profile = { id: uid, ...clienteSnap.data(), ...data };
+    }
+    if (profile.empresaId != null && profile.empresaId !== "") {
+      const sid = empresaIdAString(profile.empresaId);
+      if (sid) profile = { ...profile, empresaId: sid };
     }
     return { role, profile };
   }

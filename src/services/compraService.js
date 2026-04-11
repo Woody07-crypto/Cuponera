@@ -7,14 +7,19 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { db } from "../firebase/config";
+import { empresaIdAString } from "./empresaService";
 
 export const guardarCompra = async (data) => {
+  const empresaIdNorm =
+    data.empresaId != null && data.empresaId !== ""
+      ? empresaIdAString(data.empresaId) ?? null
+      : null;
   const docRef = await addDoc(collection(db, "cupones"), {
     clienteUid: data.uid,
     ofertaId: data.ofertaId,
     titulo: data.titulo,
     nombreEmpresa: data.nombreEmpresa,
-    empresaId: data.empresaId ?? null,
+    empresaId: empresaIdNorm,
     precio: data.precio,
     codigo: data.codigo,
     clienteDui: data.clienteDui,

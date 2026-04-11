@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { canjearCuponPorCodigo } from "../services/cuponCanjeService";
+import { empresaIdAString } from "../services/empresaService";
 
 const IcLock = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
@@ -40,7 +41,10 @@ export default function CanjearCupon() {
     setResultado(null);
     setLoading(true);
     try {
-      const r = await canjearCuponPorCodigo(codigo, dui);
+      const empresaId = empresaIdAString(profile?.empresaId);
+      const r = await canjearCuponPorCodigo(codigo, dui, {
+        empresaId: empresaId || undefined,
+      });
       setResultado(r);
       setCodigo("");
       setDui("");

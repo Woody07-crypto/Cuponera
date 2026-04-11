@@ -46,15 +46,23 @@ service cloud.firestore {
 
     function ofertaEsDeMiEmpresa() {
       return isAdminEmpresa() && (
-        (perfilData().empresaId != null && resource.data.empresaId == perfilData().empresaId) ||
-        (perfilData().nombreEmpresa != null && resource.data.nombreEmpresa == perfilData().nombreEmpresa)
+        (perfilData().empresaId != null && mismoEmpresaIdDoc(resource.data.empresaId, perfilData().empresaId)) ||
+        (
+          perfilData().nombreEmpresa is string &&
+          resource.data.nombreEmpresa is string &&
+          perfilData().nombreEmpresa.lower() == resource.data.nombreEmpresa.lower()
+        )
       );
     }
 
     function nuevaOfertaEsDeMiEmpresa() {
       return isAdminEmpresa() && (
-        (perfilData().empresaId != null && request.resource.data.empresaId == perfilData().empresaId) ||
-        (perfilData().nombreEmpresa != null && request.resource.data.nombreEmpresa == perfilData().nombreEmpresa)
+        (perfilData().empresaId != null && mismoEmpresaIdDoc(request.resource.data.empresaId, perfilData().empresaId)) ||
+        (
+          perfilData().nombreEmpresa is string &&
+          request.resource.data.nombreEmpresa is string &&
+          perfilData().nombreEmpresa.lower() == request.resource.data.nombreEmpresa.lower()
+        )
       );
     }
 
@@ -73,11 +81,36 @@ service cloud.firestore {
     }
 
     /**
+     * Ruta al doc empresas/{id}. Firestore a veces guarda empresaId como string y a veces como referencia (path).
+     */
+    function pathDocEmpresaDesdeCampo(campo) {
+      return campo is string
+        ? /databases/$(database)/documents/empresas/$(campo)
+        : campo;
+    }
+
+    /** Misma empresa aunque cupon/perfil mezclen string y DocumentReference. */
+    function mismoEmpresaIdDoc(cuponE, perfilE) {
+      return cuponE != null && perfilE != null && (
+        cuponE == perfilE ||
+        (cuponE is string && perfilE is path &&
+          perfilE == /databases/$(database)/documents/empresas/$(cuponE)) ||
+        (cuponE is path && perfilE is string &&
+          cuponE == /databases/$(database)/documents/empresas/$(perfilE))
+      );
+    }
+
+    function perfilTieneDocEmpresa() {
+      let e = perfilData().empresaId;
+      return e != null && exists(pathDocEmpresaDesdeCampo(e));
+    }
+
+    /**
      * Doc empresas del perfil. Solo usar cuando perfilData().empresaId != null
-     * y exists(/empresas/{ese id}) (short-circuit en la condición).
+     * y perfilTieneDocEmpresa() (short-circuit).
      */
     function empresaDelPerfil() {
-      return get(/databases/$(database)/documents/empresas/$(perfilData().empresaId)).data;
+      return get(pathDocEmpresaDesdeCampo(perfilData().empresaId)).data;
     }
 
     /**
@@ -86,7 +119,7 @@ service cloud.firestore {
      */
     function empleadoPuedeVerCuponPorPrefijoCodigo(cupon) {
       return perfilData().empresaId != null &&
-        exists(/databases/$(database)/documents/empresas/$(perfilData().empresaId)) &&
+        perfilTieneDocEmpresa() &&
         cupon.codigo is string &&
         empresaDelPerfil().codigoEmpresa is string &&
         empresaDelPerfil().codigoEmpresa.size() == 6 &&
@@ -102,7 +135,7 @@ service cloud.firestore {
      */
     function empleadoPuedeVerCupon(cupon) {
       return isEmpleado() && (
-        (perfilData().empresaId != null && cupon.empresaId == perfilData().empresaId) ||
+        (perfilData().empresaId != null && mismoEmpresaIdDoc(cupon.empresaId, perfilData().empresaId)) ||
         (
           perfilData().nombreEmpresa is string &&
           cupon.nombreEmpresa is string &&
@@ -111,7 +144,7 @@ service cloud.firestore {
         (
           perfilData().empresaId != null &&
           cupon.nombreEmpresa is string &&
-          exists(/databases/$(database)/documents/empresas/$(perfilData().empresaId)) &&
+          perfilTieneDocEmpresa() &&
           empresaDelPerfil().nombre is string &&
           empresaDelPerfil().nombre.lower() == cupon.nombreEmpresa.lower()
         ) ||
@@ -120,7 +153,7 @@ service cloud.firestore {
     }
 
     function empleadoMismaEmpresaQuePerfil(data) {
-      return (perfilData().empresaId != null && data.empresaId == perfilData().empresaId) ||
+      return (perfilData().empresaId != null && mismoEmpresaIdDoc(data.empresaId, perfilData().empresaId)) ||
         (
           perfilData().nombreEmpresa is string &&
           data.nombreEmpresa is string &&

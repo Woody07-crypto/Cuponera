@@ -1,5 +1,6 @@
 import {
   collection,
+  doc,
   getDocs,
   limit,
   query,
@@ -8,13 +9,16 @@ import {
   where,
 } from "firebase/firestore";
 import { auth, db } from "../firebase/config";
-import { duiCoincide } from "./empresaService";
+import { duiCoincide, empresaIdAString } from "./empresaService";
 
 /**
  * Canje de cupón vía Firestore (sin Cloud Functions; compatible con plan Spark).
  * Las reglas de seguridad exigen empleado de la misma empresa y DUI igual al del documento.
+ *
+ * @param {object} [opciones]
+ * @param {string|null} [opciones.empresaId] — id string del doc `empresas` (mejora consultas y permisos).
  */
-export async function canjearCuponPorCodigo(codigo, duiPresente) {
+export async function canjearCuponPorCodigo(codigo, duiPresente, opciones = {}) {
   const code = (codigo || "").trim().toUpperCase();
   if (!code) throw new Error("Ingresá un código válido.");
   const dui = (duiPresente || "").trim();
@@ -23,14 +27,44 @@ export async function canjearCuponPorCodigo(codigo, duiPresente) {
   const uid = auth.currentUser?.uid;
   if (!uid) throw new Error("Debés iniciar sesión para canjear.");
 
+  const empresaIdStr =
+    opciones.empresaId != null && opciones.empresaId !== ""
+      ? empresaIdAString(opciones.empresaId) || String(opciones.empresaId).trim() || null
+      : null;
+
   try {
-    const q = query(collection(db, "cupones"), where("codigo", "==", code), limit(1));
-    const qs = await getDocs(q);
-    if (qs.empty) {
-      throw new Error("No existe un cupón con ese código.");
+    let cuponRef = null;
+    let lastQueryError = null;
+
+    const tryQuery = async (q) => {
+      try {
+        const qs = await getDocs(q);
+        if (!qs.empty) return qs.docs[0].ref;
+      } catch (e) {
+        lastQueryError = e;
+      }
+      return null;
+    };
+
+    if (empresaIdStr) {
+      const empRef = doc(db, "empresas", empresaIdStr);
+      cuponRef = await tryQuery(
+        query(collection(db, "cupones"), where("codigo", "==", code), where("empresaId", "==", empRef), limit(1))
+      );
+      if (!cuponRef) {
+        cuponRef = await tryQuery(
+          query(collection(db, "cupones"), where("codigo", "==", code), where("empresaId", "==", empresaIdStr), limit(1))
+        );
+      }
+    }
+    if (!cuponRef) {
+      cuponRef = await tryQuery(query(collection(db, "cupones"), where("codigo", "==", code), limit(1)));
     }
 
-    const cuponRef = qs.docs[0].ref;
+    if (!cuponRef) {
+      if (lastQueryError) throw lastQueryError;
+      throw new Error("No existe un cupón con ese código.");
+    }
 
     const titulo = await runTransaction(db, async (transaction) => {
       const fresh = await transaction.get(cuponRef);

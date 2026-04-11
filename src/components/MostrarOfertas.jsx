@@ -201,16 +201,15 @@ function TarjetaOferta({ oferta, imagenSrc, descuento, user, onComprar, modoAdmi
             Comprar cupón <IcArrow />
           </button>
         ) : (
-          <div className="mt-auto flex flex-col gap-2">
-            <p className="text-center text-xs text-white/35 px-3 py-2 rounded-xl"
-               style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.06)" }}>
-              Necesitas cuenta para comprar
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              <Link to="/login"    className="btn-primary text-sm py-2.5 text-center">Entrar</Link>
-              <Link to="/registro" className="btn-ghost text-sm py-2.5 text-center">Registro</Link>
-            </div>
-          </div>
+          <p
+            className="mt-auto text-center text-xs text-white/35 px-3 py-2.5 rounded-xl"
+            style={{
+              background: "rgba(255,255,255,0.03)",
+              border: "1px solid rgba(255,255,255,0.06)",
+            }}
+          >
+            Necesitas cuenta para comprar
+          </p>
         )}
       </div>
     </div>

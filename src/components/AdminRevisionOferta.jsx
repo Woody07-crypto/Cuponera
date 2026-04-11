@@ -1,6 +1,7 @@
 import { useState } from "react"
-import { doc, updateDoc, deleteField } from "firebase/firestore"
+import { doc, updateDoc, deleteField, getDoc } from "firebase/firestore"
 import { db } from "../firebase/config"
+import { validarCodigoEmpresa } from "../services/empresaService"
 import { useToast } from "./ui/Toast"
 
 const IcX = () => (
@@ -23,10 +24,25 @@ export default function AdminRevisionOferta({ oferta, formatFecha, onClose, onRe
   const aprobar = async () => {
     setGuardando(true)
     try {
-      await updateDoc(doc(db, "ofertas", oferta.id), {
+      const updates = {
         estado: "aprobada",
         justificacionRechazo: deleteField(),
-      })
+      }
+      if (oferta.empresaId) {
+        try {
+          const empresaSnap = await getDoc(doc(db, "empresas", oferta.empresaId))
+          if (empresaSnap.exists()) {
+            const d = empresaSnap.data()
+            const n = (d.nombre || "").trim()
+            if (n) updates.nombreEmpresa = n
+            const v = validarCodigoEmpresa(d.codigoEmpresa)
+            if (v.ok) updates.codigoEmpresa = v.value
+          }
+        } catch (e) {
+          console.error(e)
+        }
+      }
+      await updateDoc(doc(db, "ofertas", oferta.id), updates)
       showToast("Oferta aprobada. Ya puede publicarse en el catálogo.", "success")
       onResuelto?.()
       onClose()

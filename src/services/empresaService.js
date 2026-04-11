@@ -69,6 +69,31 @@ export async function eliminarEmpresa(db, empresaId) {
 }
 
 /**
+ * Busca codigoEmpresa en `empresas` por nombre (exacto y luego sin distinguir mayúsculas).
+ * Si hay varios documentos con el mismo nombre, usa el primero que tenga código válido.
+ */
+async function codigoEmpresaDesdeNombre(db, nombreRaw) {
+  const nombre = (nombreRaw || "").trim();
+  if (!nombre) return null;
+  const q = query(collection(db, "empresas"), where("nombre", "==", nombre), limit(1));
+  const qs = await getDocs(q);
+  if (!qs.empty) {
+    const v = validarCodigoEmpresa(qs.docs[0].data()?.codigoEmpresa);
+    if (v.ok) return v.value;
+  }
+  const todas = await getDocs(collection(db, "empresas"));
+  const needle = nombre.toLowerCase();
+  const coinciden = todas.docs.filter(
+    (d) => (d.data()?.nombre || "").trim().toLowerCase() === needle
+  );
+  for (const d of coinciden) {
+    const v = validarCodigoEmpresa(d.data()?.codigoEmpresa);
+    if (v.ok) return v.value;
+  }
+  return null;
+}
+
+/**
  * Resuelve el código AAA000 de la empresa asociada a una oferta (catálogo / compra).
  */
 export async function obtenerCodigoEmpresaParaOferta(db, oferta) {
@@ -81,16 +106,9 @@ export async function obtenerCodigoEmpresaParaOferta(db, oferta) {
     if (snap.exists()) {
       const v = validarCodigoEmpresa(snap.data()?.codigoEmpresa);
       if (v.ok) return v.value;
+      const porNombreDoc = await codigoEmpresaDesdeNombre(db, snap.data()?.nombre);
+      if (porNombreDoc) return porNombreDoc;
     }
   }
-  const nombre = (oferta?.nombreEmpresa || "").trim();
-  if (nombre) {
-    const q = query(collection(db, "empresas"), where("nombre", "==", nombre), limit(1));
-    const qs = await getDocs(q);
-    if (!qs.empty) {
-      const v = validarCodigoEmpresa(qs.docs[0].data()?.codigoEmpresa);
-      if (v.ok) return v.value;
-    }
-  }
-  return null;
+  return codigoEmpresaDesdeNombre(db, oferta?.nombreEmpresa);
 }

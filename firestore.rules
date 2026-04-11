@@ -113,19 +113,35 @@ service cloud.firestore {
       return get(pathDocEmpresaDesdeCampo(perfilData().empresaId)).data;
     }
 
+    /** A veces guardan codigoEmpresa (AAA000) en perfil.empresaId por error; no es el id del doc empresas. */
+    function perfilEmpresaIdPareceCodigoEmpresa() {
+      return perfilData().empresaId is string &&
+        perfilData().empresaId.upper().matches('^[A-Z]{3}[0-9]{3}$');
+    }
+
     /**
-     * Cupón emitido con prefijo codigoEmpresa de la empresa del empleado (EVS001 + 7 dígitos).
-     * Cubre cupones con nombreEmpresa distinto al campo nombre en empresas.
+     * Cupón emitido con prefijo codigoEmpresa (EVS001 + 7 dígitos).
+     * - Caso correcto: perfil.empresaId = id del doc empresas y codigoEmpresa en ese doc.
+     * - Caso mal configurado: perfil.empresaId = AAA000 (mismo valor que codigoEmpresa).
      */
     function empleadoPuedeVerCuponPorPrefijoCodigo(cupon) {
-      return perfilData().empresaId != null &&
-        perfilTieneDocEmpresa() &&
-        cupon.codigo is string &&
-        empresaDelPerfil().codigoEmpresa is string &&
-        empresaDelPerfil().codigoEmpresa.size() == 6 &&
-        cupon.codigo.matches(
-          '^' + empresaDelPerfil().codigoEmpresa + '[0-9]{7}$'
-        );
+      return cupon.codigo is string && (
+        (
+          perfilData().empresaId != null &&
+          perfilTieneDocEmpresa() &&
+          empresaDelPerfil().codigoEmpresa is string &&
+          empresaDelPerfil().codigoEmpresa.size() == 6 &&
+          cupon.codigo.upper().matches(
+            '^' + empresaDelPerfil().codigoEmpresa.upper() + '[0-9]{7}$'
+          )
+        ) ||
+        (
+          perfilEmpresaIdPareceCodigoEmpresa() &&
+          cupon.codigo.upper().matches(
+            '^' + perfilData().empresaId.upper() + '[0-9]{7}$'
+          )
+        )
+      );
     }
 
     /**

@@ -6,7 +6,7 @@ import {
   getDocs,
   serverTimestamp,
 } from "firebase/firestore";
-import { empresaIdAString } from "./empresaService";
+import { buscarEmpresaIdPorCodigoEmpresa, empresaIdAString, validarCodigoEmpresa } from "./empresaService";
 
 /** Roles reconocidos por la app (rutas y navbar). */
 export const ROLES = {
@@ -41,6 +41,15 @@ export async function fetchRoleAndProfile(db, uid, email) {
     if (profile.empresaId != null && profile.empresaId !== "") {
       const sid = empresaIdAString(profile.empresaId);
       if (sid) profile = { ...profile, empresaId: sid };
+    }
+    // Confusión frecuente: guardar codigoEmpresa (EVS001) en vez del id del documento empresas/{id}
+    if (
+      profile.empresaId &&
+      typeof profile.empresaId === "string" &&
+      validarCodigoEmpresa(profile.empresaId).ok
+    ) {
+      const docId = await buscarEmpresaIdPorCodigoEmpresa(db, profile.empresaId);
+      if (docId) profile = { ...profile, empresaId: docId };
     }
     return { role, profile };
   }

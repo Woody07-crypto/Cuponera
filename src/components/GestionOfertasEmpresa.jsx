@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   addDoc,
   collection,
@@ -10,11 +10,24 @@ import {
   updateDoc,
   where,
 } from "firebase/firestore";
-import { db } from "../firebase/config";
+import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
+import { db, storage, auth } from "../firebase/config";
 import { useAuth } from "../context/AuthContext";
 
-const inputClass =
-  "w-full px-3 py-2 rounded-lg bg-[#1a241b] border border-gray-600 text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#668A4C]";
+const MAX_IMAGE_BYTES = 4 * 1024 * 1024;
+
+const emptyForm = {
+  titulo: "",
+  descripcion: "",
+  precioRegular: "",
+  precioOferta: "",
+  rubro: "",
+  fechaInicio: "",
+  fechaFin: "",
+  fechaLimiteCupon: "",
+  cantidadLimite: "",
+  imagenUrl: "",
+};
 
 function toTimestamp(dateStr) {
   if (!dateStr) return null;
@@ -28,17 +41,18 @@ function fromTimestamp(ts) {
   return d.toISOString().slice(0, 10);
 }
 
-const emptyForm = {
-  titulo: "",
-  descripcion: "",
-  precioRegular: "",
-  precioOferta: "",
-  rubro: "",
-  fechaInicio: "",
-  fechaFin: "",
-  fechaLimiteCupon: "",
-  cantidadLimite: "",
-};
+const IcImage = () => (
+  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <circle cx="8.5" cy="8.5" r="1.5" />
+    <path d="M21 15l-5-5L5 21" />
+  </svg>
+);
+const IcTrash = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14zM10 11v6M14 11v6" />
+  </svg>
+);
 
 export default function GestionOfertasEmpresa() {
   const { profile } = useAuth();
@@ -51,6 +65,8 @@ export default function GestionOfertasEmpresa() {
   const [form, setForm] = useState(emptyForm);
   const [editId, setEditId] = useState(null);
   const [mensaje, setMensaje] = useState(null);
+  const [imagenUploading, setImagenUploading] = useState(false);
+  const fileInputRef = useRef(null);
 
   const cargar = async () => {
     if (!empresaId && !nombreEmpresa) {
@@ -62,10 +78,7 @@ export default function GestionOfertasEmpresa() {
     try {
       let snap;
       if (empresaId) {
-        const q = query(
-          collection(db, "ofertas"),
-          where("empresaId", "==", empresaId)
-        );
+        const q = query(collection(db, "ofertas"), where("empresaId", "==", empresaId));
         snap = await getDocs(q);
       } else {
         const q = query(
@@ -87,6 +100,49 @@ export default function GestionOfertasEmpresa() {
     cargar();
   }, [empresaId, nombreEmpresa]);
 
+  const handleImagenFile = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setMensaje({ tipo: "error", text: "El archivo debe ser una imagen (JPG, PNG, WebP…)." });
+      return;
+    }
+    if (file.size > MAX_IMAGE_BYTES) {
+      setMensaje({ tipo: "error", text: "La imagen no puede superar 4 MB." });
+      return;
+    }
+    const uid = auth.currentUser?.uid;
+    if (!uid) {
+      setMensaje({ tipo: "error", text: "Debes iniciar sesión para subir imágenes." });
+      return;
+    }
+    setImagenUploading(true);
+    setMensaje(null);
+    try {
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
+      const safe = `${Date.now()}-${Math.random().toString(36).slice(2, 10)}.${ext}`;
+      const pathRef = ref(storage, `ofertas/${uid}/${safe}`);
+      await uploadBytes(pathRef, file, { contentType: file.type || "image/jpeg" });
+      const url = await getDownloadURL(pathRef);
+      setForm((f) => ({ ...f, imagenUrl: url }));
+    } catch (err) {
+      console.error(err);
+      setMensaje({
+        tipo: "error",
+        text:
+          "No se pudo subir la imagen. Verifica reglas de Storage en Firebase o usa la URL manual abajo.",
+      });
+    } finally {
+      setImagenUploading(false);
+    }
+  };
+
+  const quitarImagen = () => {
+    setForm((f) => ({ ...f, imagenUrl: "" }));
+    if (fileInputRef.current) fileInputRef.current.value = "";
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!nombreEmpresa && !empresaId) {
@@ -100,6 +156,7 @@ export default function GestionOfertasEmpresa() {
     setSaving(true);
     setMensaje(null);
     try {
+      const imagenUrl = form.imagenUrl.trim() || null;
       const payload = {
         titulo: form.titulo.trim(),
         descripcion: form.descripcion.trim(),
@@ -111,20 +168,18 @@ export default function GestionOfertasEmpresa() {
         fechaInicio: toTimestamp(form.fechaInicio),
         fechaFin: toTimestamp(form.fechaFin),
         fechaLimiteCupon: toTimestamp(form.fechaLimiteCupon),
-        cantidadLimite:
-          form.cantidadLimite === "" ? null : Number(form.cantidadLimite),
-        cuponesVendidos: editId
-          ? undefined
-          : 0,
+        cantidadLimite: form.cantidadLimite === "" ? null : Number(form.cantidadLimite),
+        imagenUrl,
+        cuponesVendidos: editId ? undefined : 0,
         estado: editId ? undefined : "pendiente",
       };
 
       if (editId) {
-        const ref = doc(db, "ofertas", editId);
+        const refDoc = doc(db, "ofertas", editId);
         const clean = Object.fromEntries(
           Object.entries(payload).filter(([, v]) => v !== undefined)
         );
-        await updateDoc(ref, clean);
+        await updateDoc(refDoc, clean);
         setMensaje({ tipo: "ok", text: "Oferta actualizada." });
       } else {
         await addDoc(collection(db, "ofertas"), {
@@ -140,6 +195,7 @@ export default function GestionOfertasEmpresa() {
 
       setForm(emptyForm);
       setEditId(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
       await cargar();
     } catch (err) {
       console.error(err);
@@ -160,9 +216,10 @@ export default function GestionOfertasEmpresa() {
       fechaInicio: fromTimestamp(o.fechaInicio),
       fechaFin: fromTimestamp(o.fechaFin),
       fechaLimiteCupon: fromTimestamp(o.fechaLimiteCupon),
-      cantidadLimite:
-        o.cantidadLimite != null ? String(o.cantidadLimite) : "",
+      cantidadLimite: o.cantidadLimite != null ? String(o.cantidadLimite) : "",
+      imagenUrl: o.imagenUrl || "",
     });
+    if (fileInputRef.current) fileInputRef.current.value = "";
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
@@ -174,6 +231,7 @@ export default function GestionOfertasEmpresa() {
       if (editId === id) {
         setEditId(null);
         setForm(emptyForm);
+        if (fileInputRef.current) fileInputRef.current.value = "";
       }
       await cargar();
     } catch (err) {
@@ -184,29 +242,35 @@ export default function GestionOfertasEmpresa() {
 
   if (loading) {
     return (
-      <div className="min-h-[50vh] flex items-center justify-center text-[#ACCC7B]">
-        Cargando ofertas…
+      <div className="page-bg min-h-[50vh] flex flex-col items-center justify-center gap-3 px-4">
+        <div className="h-9 w-9 rounded-full border-2 border-brand-purple/30 border-t-brand-cyan animate-spin" aria-hidden />
+        <p className="text-sm font-medium text-[var(--muted)]">Cargando ofertas…</p>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0f1a13] py-10 px-4 sm:px-6 text-white">
+    <div className="page-bg min-h-screen py-10 sm:py-12 px-4 sm:px-6">
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-extrabold mb-2">Gestión de ofertas</h1>
-        <p className="text-gray-400 mb-8">
-          Administra las ofertas de tu empresa. Las nuevas quedan en estado{" "}
-          <strong className="text-[#ACCC7B]">pendiente</strong> hasta que el
-          administrador las apruebe.
-        </p>
+        <header className="mb-8 sm:mb-10">
+          <h1 className="text-3xl sm:text-4xl font-heading font-bold text-white tracking-tight mb-3">
+            Gestión de <span className="text-grad">ofertas</span>
+          </h1>
+          <p className="text-[var(--muted)] text-sm sm:text-base leading-relaxed max-w-2xl">
+            Administra las ofertas de tu empresa. Las nuevas quedan en estado{" "}
+            <span className="badge badge-amber font-semibold">pendiente</span> hasta que el
+            administrador las apruebe.
+          </p>
+        </header>
 
         {mensaje && (
           <div
-            className={`mb-6 px-4 py-3 rounded-lg text-sm ${
+            className={`mb-6 rounded-xl border px-4 py-3 text-sm ${
               mensaje.tipo === "ok"
-                ? "bg-green-900/40 border border-green-700 text-green-200"
-                : "bg-red-900/40 border border-red-700 text-red-200"
+                ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-100"
+                : "border-red-500/40 bg-red-500/10 text-red-200"
             }`}
+            role="status"
           >
             {mensaje.text}
           </div>
@@ -214,156 +278,226 @@ export default function GestionOfertasEmpresa() {
 
         <form
           onSubmit={handleSubmit}
-          className="space-y-4 mb-12 p-6 rounded-2xl border border-gray-600 bg-[#1a241b]"
+          className="relative glass rounded-3xl border border-white/[0.08] shadow-glass overflow-hidden mb-12 animate-fade-in-up"
         >
-          <h2 className="text-lg font-bold">
-            {editId ? "Editar oferta" : "Nueva oferta"}
-          </h2>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <div className="sm:col-span-2">
-              <label className="block text-xs text-gray-400 mb-1">Título</label>
-              <input
-                className={inputClass}
-                value={form.titulo}
-                onChange={(e) => setForm({ ...form, titulo: e.target.value })}
-                required
-              />
+          <div className="h-1 w-full bg-gradient-brand" aria-hidden />
+          <div className="p-6 sm:p-8 space-y-6">
+            <h2 className="text-lg sm:text-xl font-heading font-bold text-white">
+              {editId ? "Editar oferta" : "Nueva oferta"}
+            </h2>
+
+            {/* Imagen */}
+            <div className="rounded-2xl border border-white/[0.08] bg-white/[0.03] p-5 sm:p-6 space-y-4">
+              <div className="flex items-center gap-2 text-white font-semibold text-sm">
+                <span className="text-brand-cyan">
+                  <IcImage />
+                </span>
+                Foto de la oferta
+              </div>
+              <p className="text-xs text-[var(--faint)] leading-relaxed">
+                Se mostrará en el catálogo público. Formatos de imagen; máximo 4 MB. Si no subes
+                archivo, puedes pegar una URL pública.
+              </p>
+
+              <div className="flex flex-col sm:flex-row gap-4 sm:items-start">
+                <div className="flex-1 min-w-0">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif"
+                    className="hidden"
+                    id="oferta-imagen-file"
+                    onChange={handleImagenFile}
+                  />
+                  <label
+                    htmlFor="oferta-imagen-file"
+                    className={`flex flex-col items-center justify-center gap-2 rounded-2xl border-2 border-dashed border-white/[0.12] bg-white/[0.02] px-4 py-8 text-center cursor-pointer transition-colors hover:border-brand-purple/40 hover:bg-brand-purple/[0.06] ${imagenUploading ? "opacity-60 pointer-events-none" : ""}`}
+                  >
+                    <span className="text-[var(--muted)] text-sm">
+                      {imagenUploading ? "Subiendo imagen…" : "Clic para elegir una imagen desde tu dispositivo"}
+                    </span>
+                    <span className="btn-ghost text-xs py-2 px-4 pointer-events-none">Seleccionar imagen</span>
+                  </label>
+                </div>
+                {form.imagenUrl ? (
+                  <div className="relative w-full sm:w-44 shrink-0 rounded-2xl border border-white/[0.1] overflow-hidden bg-black/30 aspect-video sm:aspect-square sm:h-36">
+                    <img
+                      src={form.imagenUrl}
+                      alt="Vista previa"
+                      className="w-full h-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={quitarImagen}
+                      className="absolute top-2 right-2 flex h-9 w-9 items-center justify-center rounded-xl border border-white/20 bg-black/60 text-red-200 hover:bg-red-900/50 transition-colors"
+                      aria-label="Quitar imagen"
+                    >
+                      <IcTrash />
+                    </button>
+                  </div>
+                ) : null}
+              </div>
+
+              <div>
+                <label className="label" htmlFor="oferta-imagen-url">
+                  URL de imagen (opcional)
+                </label>
+                <input
+                  id="oferta-imagen-url"
+                  type="url"
+                  className="input-field text-sm"
+                  placeholder="https://ejemplo.com/mi-banner.jpg"
+                  value={form.imagenUrl}
+                  onChange={(e) => setForm({ ...form, imagenUrl: e.target.value })}
+                />
+              </div>
             </div>
-            <div className="sm:col-span-2">
-              <label className="block text-xs text-gray-400 mb-1">
-                Descripción
-              </label>
-              <textarea
-                className={`${inputClass} min-h-[88px]`}
-                value={form.descripcion}
-                onChange={(e) =>
-                  setForm({ ...form, descripcion: e.target.value })
-                }
-                required
-              />
+
+            <div className="grid sm:grid-cols-2 gap-4 sm:gap-5">
+              <div className="sm:col-span-2">
+                <label className="label" htmlFor="oferta-titulo">
+                  Título
+                </label>
+                <input
+                  id="oferta-titulo"
+                  className="input-field"
+                  value={form.titulo}
+                  onChange={(e) => setForm({ ...form, titulo: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="label" htmlFor="oferta-desc">
+                  Descripción
+                </label>
+                <textarea
+                  id="oferta-desc"
+                  className="input-field min-h-[100px] resize-y"
+                  value={form.descripcion}
+                  onChange={(e) => setForm({ ...form, descripcion: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="oferta-rubro">
+                  Rubro
+                </label>
+                <input
+                  id="oferta-rubro"
+                  className="input-field"
+                  value={form.rubro}
+                  onChange={(e) => setForm({ ...form, rubro: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="oferta-limite">
+                  Límite de cupones (opcional)
+                </label>
+                <input
+                  id="oferta-limite"
+                  type="number"
+                  min={1}
+                  className="input-field"
+                  value={form.cantidadLimite}
+                  onChange={(e) => setForm({ ...form, cantidadLimite: e.target.value })}
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="oferta-precio-reg">
+                  Precio regular
+                </label>
+                <input
+                  id="oferta-precio-reg"
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  className="input-field"
+                  value={form.precioRegular}
+                  onChange={(e) => setForm({ ...form, precioRegular: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="oferta-precio-of">
+                  Precio oferta
+                </label>
+                <input
+                  id="oferta-precio-of"
+                  type="number"
+                  step="0.01"
+                  min={0}
+                  className="input-field"
+                  value={form.precioOferta}
+                  onChange={(e) => setForm({ ...form, precioOferta: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="oferta-ini">
+                  Vigencia desde
+                </label>
+                <input
+                  id="oferta-ini"
+                  type="date"
+                  className="input-field"
+                  value={form.fechaInicio}
+                  onChange={(e) => setForm({ ...form, fechaInicio: e.target.value })}
+                  required
+                />
+              </div>
+              <div>
+                <label className="label" htmlFor="oferta-fin">
+                  Vigencia hasta
+                </label>
+                <input
+                  id="oferta-fin"
+                  type="date"
+                  className="input-field"
+                  value={form.fechaFin}
+                  onChange={(e) => setForm({ ...form, fechaFin: e.target.value })}
+                  required
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="label" htmlFor="oferta-limite-cupon">
+                  Canjear cupón antes de
+                </label>
+                <input
+                  id="oferta-limite-cupon"
+                  type="date"
+                  className="input-field max-w-xs"
+                  value={form.fechaLimiteCupon}
+                  onChange={(e) => setForm({ ...form, fechaLimiteCupon: e.target.value })}
+                  required
+                />
+              </div>
             </div>
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">Rubro</label>
-              <input
-                className={inputClass}
-                value={form.rubro}
-                onChange={(e) => setForm({ ...form, rubro: e.target.value })}
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">
-                Límite de cupones (opcional)
-              </label>
-              <input
-                type="number"
-                min={1}
-                className={inputClass}
-                value={form.cantidadLimite}
-                onChange={(e) =>
-                  setForm({ ...form, cantidadLimite: e.target.value })
-                }
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">
-                Precio regular
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min={0}
-                className={inputClass}
-                value={form.precioRegular}
-                onChange={(e) =>
-                  setForm({ ...form, precioRegular: e.target.value })
-                }
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">
-                Precio oferta
-              </label>
-              <input
-                type="number"
-                step="0.01"
-                min={0}
-                className={inputClass}
-                value={form.precioOferta}
-                onChange={(e) =>
-                  setForm({ ...form, precioOferta: e.target.value })
-                }
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">
-                Vigencia desde
-              </label>
-              <input
-                type="date"
-                className={inputClass}
-                value={form.fechaInicio}
-                onChange={(e) =>
-                  setForm({ ...form, fechaInicio: e.target.value })
-                }
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">
-                Vigencia hasta
-              </label>
-              <input
-                type="date"
-                className={inputClass}
-                value={form.fechaFin}
-                onChange={(e) => setForm({ ...form, fechaFin: e.target.value })}
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-gray-400 mb-1">
-                Canjear cupón antes de
-              </label>
-              <input
-                type="date"
-                className={inputClass}
-                value={form.fechaLimiteCupon}
-                onChange={(e) =>
-                  setForm({ ...form, fechaLimiteCupon: e.target.value })
-                }
-                required
-              />
-            </div>
-          </div>
-          <div className="flex flex-wrap gap-3 pt-2">
-            <button
-              type="submit"
-              disabled={saving}
-              className="bg-[#668A4C] hover:bg-[#557240] disabled:opacity-50 px-6 py-2.5 rounded-lg font-bold text-sm"
-            >
-              {saving ? "Guardando…" : editId ? "Actualizar" : "Crear oferta"}
-            </button>
-            {editId && (
-              <button
-                type="button"
-                onClick={() => {
-                  setEditId(null);
-                  setForm(emptyForm);
-                }}
-                className="border border-gray-500 px-6 py-2.5 rounded-lg font-semibold text-sm text-gray-300 hover:bg-white/5"
-              >
-                Cancelar edición
+
+            <div className="flex flex-wrap gap-3 pt-2">
+              <button type="submit" disabled={saving || imagenUploading} className="btn-primary">
+                {saving ? "Guardando…" : editId ? "Actualizar oferta" : "Crear oferta"}
               </button>
-            )}
+              {editId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditId(null);
+                    setForm(emptyForm);
+                    if (fileInputRef.current) fileInputRef.current.value = "";
+                  }}
+                  className="btn-ghost"
+                >
+                  Cancelar edición
+                </button>
+              )}
+            </div>
           </div>
         </form>
 
-        <h2 className="text-xl font-bold mb-4">Tus ofertas</h2>
+        <h2 className="text-xl font-heading font-bold text-white mb-4">Tus ofertas</h2>
         {ofertas.length === 0 ? (
-          <p className="text-gray-500">
+          <p className="text-sm text-[var(--muted)] rounded-2xl border border-white/[0.06] bg-white/[0.02] px-5 py-8 text-center">
             Aún no hay ofertas asociadas a tu empresa en Firestore.
           </p>
         ) : (
@@ -371,34 +505,43 @@ export default function GestionOfertasEmpresa() {
             {ofertas.map((o) => (
               <li
                 key={o.id}
-                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 rounded-xl border border-gray-600 bg-[#1a241b]"
+                className="glass rounded-2xl border border-white/[0.08] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center gap-4 justify-between"
               >
-                <div>
-                  <p className="font-bold text-white">{o.titulo}</p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    Estado:{" "}
-                    <span className="text-[#ACCC7B] font-semibold">
-                      {o.estado || "—"}
-                    </span>
-                    {" · "}
-                    Vendidos: {o.cuponesVendidos ?? 0}
-                    {o.cantidadLimite != null
-                      ? ` / ${o.cantidadLimite}`
-                      : ""}
-                  </p>
+                <div className="flex gap-4 min-w-0">
+                  {o.imagenUrl ? (
+                    <img
+                      src={o.imagenUrl}
+                      alt=""
+                      className="w-20 h-20 rounded-xl object-cover border border-white/10 shrink-0"
+                    />
+                  ) : (
+                    <div className="w-20 h-20 rounded-xl border border-dashed border-white/15 bg-white/[0.04] flex items-center justify-center text-[var(--faint)] shrink-0">
+                      <IcImage />
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <p className="font-heading font-bold text-white truncate">{o.titulo}</p>
+                    <p className="text-xs text-[var(--muted)] mt-1">
+                      Estado:{" "}
+                      <span className="text-cyan-300/90 font-semibold">{o.estado || "—"}</span>
+                      {" · "}
+                      Vendidos: {o.cuponesVendidos ?? 0}
+                      {o.cantidadLimite != null ? ` / ${o.cantidadLimite}` : ""}
+                    </p>
+                  </div>
                 </div>
                 <div className="flex gap-2 shrink-0">
                   <button
                     type="button"
                     onClick={() => iniciarEdicion(o)}
-                    className="text-sm px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 font-semibold"
+                    className="text-sm px-4 py-2 rounded-xl border border-white/[0.12] bg-white/[0.06] text-white font-semibold hover:bg-white/10 transition-colors"
                   >
                     Editar
                   </button>
                   <button
                     type="button"
                     onClick={() => eliminar(o.id)}
-                    className="text-sm px-3 py-2 rounded-lg bg-red-900/50 hover:bg-red-800/60 text-red-200 font-semibold"
+                    className="text-sm px-4 py-2 rounded-xl border border-red-500/30 bg-red-500/10 text-red-200 font-semibold hover:bg-red-500/20 transition-colors"
                   >
                     Eliminar
                   </button>

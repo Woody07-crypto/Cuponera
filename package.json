@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "preview": "vite preview",
     "sync:auth-perfiles": "node scripts/syncAuthToPerfiles.mjs",
-    "deploy": "firebase deploy --only hosting,firestore:rules",
+    "deploy": "firebase deploy --only hosting,firestore:rules,storage",
     "deploy:hosting": "firebase deploy --only hosting",
     "deploy:rules": "firebase deploy --only firestore:rules"
   },

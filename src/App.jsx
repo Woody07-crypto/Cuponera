@@ -13,6 +13,8 @@ import Privacidad from "./components/Privacidad"
 import AdminPanel from "./components/AdminPanel"
 import GestionOfertasEmpresa from "./components/GestionOfertasEmpresa"
 import CanjearCupon from "./components/CanjearCupon"
+import RecuperarContrasena from "./components/RecuperarContrasena"
+import CambiarContrasena from "./components/CambiarContrasena"
 
 const IconTicket = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -107,6 +109,11 @@ function NavBar() {
                 </>
               ) : (
                 <div className="flex items-center gap-3">
+                  {user.providerData?.some((p) => p.providerId === "password") ? (
+                    <Link to="/cambiar-contrasena" className="text-xs text-white/45 hover:text-cyan-300/90 transition-colors">
+                      Contraseña
+                    </Link>
+                  ) : null}
                   <div className="flex flex-col items-end">
                     <span className="text-xs text-white/35 truncate max-w-[150px]">{user.email}</span>
                     <span className="text-xs font-medium" style={{ color: "#22D3EE" }}>{role}</span>
@@ -146,9 +153,20 @@ function NavBar() {
                   <Link to="/registro" onClick={() => setMenuAbierto(false)} className="btn-primary text-sm py-2.5 w-full">Registrarse</Link>
                 </>
               ) : (
-                <div className="flex justify-between items-center">
-                  <span className="text-xs text-white/35 truncate">{user.email}</span>
-                  <button onClick={() => { logout(); setMenuAbierto(false) }} className="text-sm text-red-400 font-medium">Salir</button>
+                <div className="flex flex-col gap-2">
+                  {user.providerData?.some((p) => p.providerId === "password") ? (
+                    <Link
+                      to="/cambiar-contrasena"
+                      onClick={() => setMenuAbierto(false)}
+                      className="text-sm text-cyan-300/90 py-2"
+                    >
+                      Cambiar contraseña
+                    </Link>
+                  ) : null}
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-white/35 truncate">{user.email}</span>
+                    <button onClick={() => { logout(); setMenuAbierto(false) }} className="text-sm text-red-400 font-medium">Salir</button>
+                  </div>
                 </div>
               )}
             </div>
@@ -195,6 +213,7 @@ export default function App() {
                 <Route path="/" element={<Navigate to="/comprar" replace />} />
                 <Route path="/comprar"   element={<MostrarOfertas />} />
                 <Route path="/login"     element={<Login />} />
+                <Route path="/recuperar-contrasena" element={<RecuperarContrasena />} />
                 <Route path="/registro"  element={<Registro />} />
                 <Route path="/terminos"  element={<Terminos />} />
                 <Route path="/privacidad" element={<Privacidad />} />
@@ -202,6 +221,7 @@ export default function App() {
                 <Route path="/admin" element={<RutaProtegida><RutaPorRol roles={["admin"]}><AdminPanel /></RutaPorRol></RutaProtegida>} />
                 <Route path="/empresa/ofertas" element={<RutaProtegida><RutaPorRol roles={["admin_empresa"]}><GestionOfertasEmpresa /></RutaPorRol></RutaProtegida>} />
                 <Route path="/canjear" element={<RutaProtegida><RutaPorRol roles={["empleado"]}><CanjearCupon /></RutaPorRol></RutaProtegida>} />
+                <Route path="/cambiar-contrasena" element={<RutaProtegida><CambiarContrasena /></RutaProtegida>} />
               </Routes>
             </main>
             <Footer />

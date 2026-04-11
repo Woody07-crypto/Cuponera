@@ -79,13 +79,49 @@ service cloud.firestore {
       );
     }
 
+    function empleadoMismaEmpresaQuePerfil(data) {
+      return (perfilData().empresaId != null && data.empresaId == perfilData().empresaId) ||
+        (perfilData().nombreEmpresa != null && data.nombreEmpresa == perfilData().nombreEmpresa);
+    }
+
+    function invitacionEmpleadoValida(userId) {
+      return isAdminEmpresa() &&
+        request.auth.uid != userId &&
+        request.resource.data.role == 'empleado' &&
+        empleadoMismaEmpresaQuePerfil(request.resource.data);
+    }
+
+    match /rubros/{rubroId} {
+      allow read: if signedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
     match /perfiles/{userId} {
-      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
+      allow read: if signedIn() && (
+        request.auth.uid == userId ||
+        isAdmin() ||
+        (isAdminEmpresa() && resource.data.role == 'empleado' &&
+          empleadoMismaEmpresaQuePerfil(resource.data))
+      );
       allow create: if signedIn() && (
         (request.auth.uid == userId && request.resource.data.role == 'cliente') ||
-        isAdmin()
+        isAdmin() ||
+        invitacionEmpleadoValida(userId)
       );
-      allow update, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        isAdminEmpresa() &&
+        request.auth.uid != userId &&
+        resource.data.role == 'empleado' &&
+        request.resource.data.role == 'empleado' &&
+        empleadoMismaEmpresaQuePerfil(resource.data) &&
+        empleadoMismaEmpresaQuePerfil(request.resource.data)
+      );
+      allow delete: if isAdmin() || (
+        isAdminEmpresa() &&
+        request.auth.uid != userId &&
+        resource.data.role == 'empleado' &&
+        empleadoMismaEmpresaQuePerfil(resource.data)
+      );
     }
 
     match /clientes/{userId} {
@@ -124,17 +160,20 @@ service cloud.firestore {
         empleadoPuedeVerCupon(resource.data)
       );
 
-      allow create: if signedIn() &&
-        request.resource.data.clienteUid == request.auth.uid;
+      allow create: if puedeComprarComoCliente() &&
+        request.resource.data.clienteUid == request.auth.uid &&
+        request.resource.data.estado == 'disponible' &&
+        request.resource.data.clienteDui is string &&
+        request.resource.data.clienteDui.size() >= 8;
 
-      allow update: if isAdmin() ||
-        (signedIn() && isEmpleado() && empleadoPuedeVerCupon(resource.data) &&
-          resource.data.estado == 'disponible' &&
-          request.resource.data.estado == 'canjeado' &&
-          request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['estado', 'fechaCanje', 'canjeadoPorUid']));
+      // Canje solo vía Cloud Function (valida DUI y empresa con privilegios de admin).
+      allow update: if isAdmin();
 
       allow delete: if isAdmin();
+    }
+
+    match /mail/{mailId} {
+      allow read, write: if false;
     }
   }
 }

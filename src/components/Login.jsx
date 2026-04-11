@@ -224,6 +224,12 @@ export default function Login() {
               </div>
             </Field>
 
+            <div className="text-right -mt-2">
+              <Link to="/recuperar-contrasena" className="text-xs text-cyan-400/85 hover:underline">
+                ¿Olvidaste tu contraseña?
+              </Link>
+            </div>
+
             <button type="submit" disabled={loading} className="btn-primary w-full py-3.5 mt-1">
               {loading ? (
                 <span className="flex items-center gap-2">

@@ -1,7 +1,17 @@
 import { useState } from "react";
 import { useGenerarCodigo } from "./useGenerarCodigo";
 import { guardarCompra, incrementarCuponesVendidos } from "../services/compraService";
+import { obtenerCodigoEmpresaParaOferta } from "../services/empresaService";
 import { useAuth } from "../context/AuthContext";
+import { db } from "../firebase/config";
+
+function clienteDuiDesdePerfil(profile) {
+  const raw = (profile?.dui || "").trim();
+  if (!raw) return null;
+  const digits = raw.replace(/\D/g, "");
+  if (digits.length < 8) return null;
+  return raw;
+}
 
 export function useCompra() {
   const [cantidad, setCantidad] = useState(1);
@@ -11,11 +21,19 @@ export function useCompra() {
   const [exitoso, setExitoso] = useState(false);
 
   const { generarCodigo } = useGenerarCodigo();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   const comprar = async (oferta) => {
     if (!user) {
       setError("Debes iniciar sesión para comprar.");
+      return false;
+    }
+
+    const clienteDui = clienteDuiDesdePerfil(profile);
+    if (!clienteDui) {
+      setError(
+        "Tu cuenta no tiene un DUI válido registrado. Actualiza tus datos en registro o contacta al administrador."
+      );
       return false;
     }
 
@@ -24,10 +42,18 @@ export function useCompra() {
       setError(null);
       setExitoso(false);
 
+      const codigoEmpresa = await obtenerCodigoEmpresaParaOferta(db, oferta);
+      if (!codigoEmpresa) {
+        setError(
+          "Esta empresa no tiene código AAA000 configurado. Un administrador debe completar los datos de la empresa antes de permitir compras."
+        );
+        return false;
+      }
+
       const nuevosCodigos = [];
 
       for (let i = 0; i < cantidad; i++) {
-        const codigo = generarCodigo(oferta.nombreEmpresa);
+        const codigo = generarCodigo(codigoEmpresa);
 
         await guardarCompra({
           uid: user.uid,
@@ -37,6 +63,7 @@ export function useCompra() {
           empresaId: oferta.empresaId ?? null,
           precio: oferta.precioOferta,
           codigo,
+          clienteDui,
           fechaLimiteCupon: oferta.fechaLimiteCupon ?? null,
         });
 
@@ -50,12 +77,10 @@ export function useCompra() {
       setCantidad(1);
 
       return true;
-
     } catch (err) {
       console.error("Error en compra:", err);
       setError("Error al procesar la compra.");
       return false;
-
     } finally {
       setLoading(false);
     }
@@ -68,6 +93,6 @@ export function useCompra() {
     codigosGenerados,
     loading,
     error,
-    exitoso
+    exitoso,
   };
 }
